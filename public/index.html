@@ -183,6 +183,27 @@
         border-color: #374151;
       }
 
+      /* Swap cam button — chỉ hiện trên mobile có nhiều camera */
+      .btn-swap {
+        background: #1e3a5f;
+        color: #93c5fd;
+        border: 1px solid #1d4ed8;
+        display: none; /* ẩn mặc định, JS bật nếu có camera sau/trước */
+      }
+
+      .btn-swap:hover {
+        background: #1e40af;
+      }
+
+      .btn-swap.swapping svg {
+        animation: spin 0.4s linear;
+      }
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+
       #peer-count {
         font-size: 0.82rem;
         color: #94a3b8;
@@ -207,7 +228,6 @@
 
     <div id="controls">
       <button class="btn btn-cam" id="btn-cam" onclick="toggleCam()">
-        <!-- cam on icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
         </svg>
@@ -215,12 +235,21 @@
       </button>
 
       <button class="btn btn-mic" id="btn-mic" onclick="toggleMic()">
-        <!-- mic on icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/>
           <path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>
         </svg>
         Micro
+      </button>
+
+      <!-- Nút swap camera — JS sẽ show nếu thiết bị có nhiều camera -->
+      <button class="btn btn-swap" id="btn-swap" onclick="swapCam()" title="Đổi camera">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+          <circle cx="12" cy="12" r="2"/>
+          <path d="M7 3l-3 4M17 3l3 4"/>
+        </svg>
+        Đổi cam
       </button>
 
       <span id="peer-count">👥 1 người</span>
@@ -239,11 +268,16 @@
 
       // ─── State ────────────────────────────────────────────────
       const peers = new Map();   // peerId -> RTCPeerConnection
-      const iceBuf = new Map();  // peerId -> [candidates] (buffer trước khi có remoteDesc)
+      const iceBuf = new Map();  // peerId -> [candidates]
       let localStream = null;
       let camOn = true;
       let micOn = true;
       let myId = null;
+
+      // Swap cam state
+      let currentFacingMode = "user";          // "user" = trước, "environment" = sau
+      let availableCameras = [];               // danh sách deviceId camera
+      let currentCamIndex = 0;                 // index trong availableCameras
 
       const grid = document.getElementById("video-grid");
       const statusEl = document.getElementById("status");
@@ -260,25 +294,16 @@
 
       socket.on("disconnect", () => setStatus("Mất kết nối", true));
 
-      // Nhận danh sách user cũ -> mình (newcomer) sẽ initiate offer
       socket.on("existing-users", async (userIds) => {
-        console.log("[existing-users]", userIds);
-        for (const uid of userIds) {
-          await createOffer(uid);
-        }
+        for (const uid of userIds) await createOffer(uid);
         updateCount();
       });
 
-      // Peer mới join -> họ sẽ gửi offer đến mình, mình chờ
       socket.on("user-joined", ({ userId }) => {
-        console.log("[user-joined]", userId);
-        // Không làm gì, chờ offer từ userId
         updateCount();
       });
 
-      // Nhận offer -> trả answer
       socket.on("offer", async ({ from, offer }) => {
-        console.log("[offer from]", from);
         const pc = getOrCreatePC(from);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await flushIceBuf(from);
@@ -287,9 +312,7 @@
         socket.emit("answer", { to: from, answer });
       });
 
-      // Nhận answer
       socket.on("answer", async ({ from, answer }) => {
-        console.log("[answer from]", from);
         const pc = peers.get(from);
         if (!pc) return;
         if (pc.signalingState === "have-local-offer") {
@@ -298,27 +321,19 @@
         }
       });
 
-      // Nhận ICE candidate
       socket.on("ice-candidate", async ({ from, candidate }) => {
         const pc = peers.get(from);
         if (!pc) return;
-
         if (pc.remoteDescription && pc.remoteDescription.type) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (e) {
-            console.warn("addIceCandidate error:", e);
-          }
+          try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+          catch (e) { console.warn("addIceCandidate error:", e); }
         } else {
-          // Buffer lại chờ setRemoteDescription
           if (!iceBuf.has(from)) iceBuf.set(from, []);
           iceBuf.get(from).push(candidate);
         }
       });
 
-      // User rời đi
       socket.on("user-left", ({ userId }) => {
-        console.log("[user-left]", userId);
         closePeer(userId);
         updateCount();
       });
@@ -327,7 +342,7 @@
       async function startMedia() {
         try {
           localStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: true,
           });
         } catch (e) {
@@ -335,7 +350,88 @@
           localStream = new MediaStream();
         }
         addVideoEl("local", localStream, "Bạn", true);
+        await detectCameras();
         socket.emit("join");
+      }
+
+      // Kiểm tra thiết bị có nhiều camera không -> show nút swap
+      async function detectCameras() {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          availableCameras = devices.filter(d => d.kind === "videoinput");
+          const btnSwap = document.getElementById("btn-swap");
+          if (availableCameras.length > 1) {
+            btnSwap.style.display = "flex";
+          }
+        } catch (e) {
+          console.warn("enumerateDevices error:", e);
+        }
+      }
+
+      // ─── Swap Camera ──────────────────────────────────────────
+      async function swapCam() {
+        if (!localStream) return;
+
+        const btnSwap = document.getElementById("btn-swap");
+        btnSwap.classList.add("swapping");
+        btnSwap.disabled = true;
+
+        try {
+          // Đổi facingMode
+          currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+
+          // Lấy stream mới với camera đã đổi
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false, // giữ audio track cũ
+          });
+
+          const newVideoTrack = newStream.getVideoTracks()[0];
+          const oldVideoTrack = localStream.getVideoTracks()[0];
+
+          // Cập nhật video element local
+          const videoEl = document.getElementById("video-local");
+          if (videoEl) {
+            // Tạo stream preview mới cho video local (giữ audio track cũ)
+            const previewStream = new MediaStream([
+              newVideoTrack,
+              ...localStream.getAudioTracks(),
+            ]);
+            videoEl.srcObject = previewStream;
+          }
+
+          // Thay track trong localStream
+          if (oldVideoTrack) {
+            localStream.removeTrack(oldVideoTrack);
+            oldVideoTrack.stop();
+          }
+          localStream.addTrack(newVideoTrack);
+
+          // Replace track trong tất cả RTCPeerConnection đang có
+          for (const [, pc] of peers) {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+            if (sender) {
+              await sender.replaceTrack(newVideoTrack);
+            }
+          }
+
+          // Cập nhật trạng thái cam-off nếu cam đang tắt
+          if (!camOn) {
+            newVideoTrack.enabled = false;
+          }
+
+        } catch (e) {
+          console.error("Swap cam error:", e);
+          // Nếu lỗi (vd: không có camera sau), quay lại facingMode cũ
+          currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+          setStatus("Không thể đổi camera", true);
+          setTimeout(() => setStatus("Đã kết nối", false), 2000);
+        } finally {
+          setTimeout(() => {
+            btnSwap.classList.remove("swapping");
+            btnSwap.disabled = false;
+          }, 400);
+        }
       }
 
       // ─── RTCPeerConnection factory ────────────────────────────
@@ -346,12 +442,10 @@
         peers.set(peerId, pc);
         iceBuf.set(peerId, []);
 
-        // Thêm local tracks
         if (localStream) {
           localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
         }
 
-        // Nhận remote track -> hiện video
         pc.ontrack = ({ streams }) => {
           const stream = streams[0];
           if (!stream) return;
@@ -364,27 +458,16 @@
           updateCount();
         };
 
-        // Gửi ICE candidate
         pc.onicecandidate = ({ candidate }) => {
-          if (candidate) {
-            socket.emit("ice-candidate", { to: peerId, candidate });
-          }
+          if (candidate) socket.emit("ice-candidate", { to: peerId, candidate });
         };
 
-        // Log state
         pc.onconnectionstatechange = () => {
-          console.log(`[${shortId(peerId)}] connectionState:`, pc.connectionState);
-          if (pc.connectionState === "failed") {
-            pc.restartIce();
-          }
+          if (pc.connectionState === "failed") pc.restartIce();
           if (["disconnected", "closed", "failed"].includes(pc.connectionState)) {
             closePeer(peerId);
             updateCount();
           }
-        };
-
-        pc.onsignalingstatechange = () => {
-          console.log(`[${shortId(peerId)}] signalingState:`, pc.signalingState);
         };
 
         return pc;
@@ -406,22 +489,15 @@
         const pc = peers.get(peerId);
         if (!pc) return;
         for (const c of buf) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(c));
-          } catch (e) {
-            console.warn("flush ICE error:", e);
-          }
+          try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
+          catch (e) { console.warn("flush ICE error:", e); }
         }
         iceBuf.set(peerId, []);
       }
 
       function closePeer(peerId) {
         const pc = peers.get(peerId);
-        if (pc) {
-          pc.close();
-          peers.delete(peerId);
-          iceBuf.delete(peerId);
-        }
+        if (pc) { pc.close(); peers.delete(peerId); iceBuf.delete(peerId); }
         const el = document.getElementById(`wrapper-${peerId}`);
         if (el) el.remove();
       }
