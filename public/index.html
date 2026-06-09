@@ -6,14 +6,14 @@
     <title>WebRTC Multi-User</title>
     <style>
       * {
-        box-sizing: border-box;
         margin: 0;
         padding: 0;
+        box-sizing: border-box;
       }
 
       body {
-        background: #0f0f13;
-        color: #e0e0e0;
+        background: #0f0f1a;
+        color: #fff;
         font-family: "Segoe UI", sans-serif;
         min-height: 100vh;
         display: flex;
@@ -22,7 +22,7 @@
 
       header {
         background: #1a1a2e;
-        padding: 12px 20px;
+        padding: 14px 24px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -31,42 +31,46 @@
 
       header h1 {
         font-size: 1.1rem;
-        color: #7c6fff;
+        color: #a78bfa;
         letter-spacing: 1px;
       }
 
       #status {
-        font-size: 0.78rem;
-        color: #888;
+        font-size: 0.8rem;
+        color: #6ee7b7;
+        background: #064e3b22;
+        border: 1px solid #6ee7b744;
+        padding: 4px 12px;
+        border-radius: 99px;
       }
 
-      #status span {
-        color: #4ade80;
-        font-weight: bold;
+      #status.error {
+        color: #fca5a5;
+        border-color: #fca5a544;
       }
 
       /* Grid video */
       #video-grid {
         flex: 1;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 10px;
-        padding: 14px;
+        padding: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         align-content: start;
       }
 
       .video-wrapper {
         position: relative;
-        background: #1c1c2e;
+        background: #1a1a2e;
         border-radius: 12px;
         overflow: hidden;
         aspect-ratio: 16/9;
-        border: 1.5px solid #2d2d50;
-        transition: border-color 0.2s;
+        border: 1px solid #2a2a4a;
+        transition: border-color 0.3s;
       }
 
-      .video-wrapper:hover {
-        border-color: #7c6fff;
+      .video-wrapper.speaking {
+        border-color: #a78bfa;
       }
 
       .video-wrapper video {
@@ -74,7 +78,7 @@
         height: 100%;
         object-fit: cover;
         display: block;
-        background: #111;
+        background: #000;
       }
 
       .video-wrapper .label {
@@ -82,22 +86,27 @@
         bottom: 8px;
         left: 10px;
         font-size: 0.72rem;
-        background: rgba(0, 0, 0, 0.6);
+        background: #0008;
         padding: 2px 8px;
-        border-radius: 20px;
-        color: #ccc;
+        border-radius: 6px;
+        color: #e2e8f0;
+        pointer-events: none;
+        max-width: 80%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .video-wrapper .cam-off-overlay {
-        display: none;
         position: absolute;
         inset: 0;
-        background: #1c1c2e;
+        display: none;
         align-items: center;
         justify-content: center;
+        background: #1a1a2e;
         flex-direction: column;
         gap: 8px;
-        color: #555;
+        color: #6b7280;
         font-size: 0.85rem;
       }
 
@@ -107,7 +116,7 @@
         opacity: 0.4;
       }
 
-      .cam-off .cam-off-overlay {
+      .video-wrapper.cam-off .cam-off-overlay {
         display: flex;
       }
 
@@ -115,357 +124,381 @@
       #controls {
         background: #1a1a2e;
         border-top: 1px solid #2a2a4a;
-        padding: 14px 20px;
+        padding: 14px 24px;
         display: flex;
         justify-content: center;
         gap: 16px;
+        flex-wrap: wrap;
       }
 
-      .ctrl-btn {
+      .btn {
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 4px;
+        gap: 7px;
+        padding: 10px 20px;
+        border-radius: 99px;
+        border: none;
         cursor: pointer;
-        background: #25253e;
-        border: 1.5px solid #3a3a60;
-        border-radius: 12px;
-        padding: 10px 18px;
-        color: #ccc;
-        font-size: 0.7rem;
+        font-size: 0.88rem;
+        font-weight: 600;
         transition: all 0.2s;
-        min-width: 72px;
+        outline: none;
       }
 
-      .ctrl-btn:hover {
-        background: #30305a;
-        border-color: #7c6fff;
-        color: #fff;
+      .btn svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
       }
 
-      .ctrl-btn.off {
-        background: #3d1a1a;
-        border-color: #c0392b;
-        color: #e74c3c;
+      .btn-cam {
+        background: #312e81;
+        color: #c4b5fd;
+        border: 1px solid #4c1d95;
       }
 
-      .ctrl-btn svg {
-        width: 22px;
-        height: 22px;
+      .btn-cam:hover {
+        background: #3730a3;
       }
 
-      /* Empty state */
-      #empty-msg {
-        display: none;
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        color: #444;
+      .btn-cam.off {
+        background: #1f2937;
+        color: #6b7280;
+        border-color: #374151;
       }
 
-      #empty-msg h2 {
-        font-size: 1.4rem;
-        margin-bottom: 8px;
-        color: #555;
+      .btn-mic {
+        background: #064e3b;
+        color: #6ee7b7;
+        border: 1px solid #065f46;
+      }
+
+      .btn-mic:hover {
+        background: #065f46;
+      }
+
+      .btn-mic.off {
+        background: #1f2937;
+        color: #6b7280;
+        border-color: #374151;
+      }
+
+      #peer-count {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        align-self: center;
+      }
+
+      /* Responsive: 1 người full, 2 người 2 cột, nhiều hơn auto */
+      @media (max-width: 500px) {
+        #video-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <header>
-      <h1>🎥 WebRTC Phòng Chung</h1>
-      <div id="status">Đang kết nối... (<span id="peer-count">0</span> người)</div>
+      <h1>🎥 WebRTC Room</h1>
+      <span id="status">Đang kết nối...</span>
     </header>
 
-    <div id="video-grid">
-      <!-- Local video sẽ được thêm vào đây -->
-    </div>
-
-    <div id="empty-msg">
-      <h2>👋 Chỉ có mình bạn</h2>
-      <p>Chờ người khác tham gia...</p>
-    </div>
+    <div id="video-grid"></div>
 
     <div id="controls">
-      <!-- Cam -->
-      <button class="ctrl-btn" id="btn-cam" onclick="toggleCam()">
+      <button class="btn btn-cam" id="btn-cam" onclick="toggleCam()">
+        <!-- cam on icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 7l-7 5 7 5V7z"/>
-          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
         </svg>
-        <span>Camera</span>
+        Camera
       </button>
 
-      <!-- Mic -->
-      <button class="ctrl-btn" id="btn-mic" onclick="toggleMic()">
+      <button class="btn btn-mic" id="btn-mic" onclick="toggleMic()">
+        <!-- mic on icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-          <line x1="12" y1="19" x2="12" y2="23"/>
-          <line x1="8" y1="23" x2="16" y2="23"/>
+          <path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/>
+          <path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>
         </svg>
-        <span>Micro</span>
+        Micro
       </button>
+
+      <span id="peer-count">👥 1 người</span>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-   const socket = io();
-      // --- State ---
-      let localStream = null;
-      let camOn = true;
-      let micOn = true;
-      const peerConnections = {}; // peerId -> RTCPeerConnection
+      // ─── Config ───────────────────────────────────────────────
       const ICE_SERVERS = {
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:stun1.l.google.com:19302" },
-          {
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject",
-          },
-          {
-            urls: "turn:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject",
-          },
-          {
-            urls: "turns:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject",
-          },
+          { urls: "stun:stun2.l.google.com:19302" },
         ],
       };
 
-      // =====================
-      // 1. Lấy media local
-      // =====================
-      async function initMedia() {
-        try {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-        } catch (e) {
-          // Thử chỉ audio nếu không có cam
-          try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-              video: false,
-              audio: true,
-            });
-            camOn = false;
-          } catch (e2) {
-            localStream = new MediaStream();
-            camOn = false;
-            micOn = false;
-          }
-        }
-        addLocalVideo();
-        updateControlUI();
-      }
+      // ─── State ────────────────────────────────────────────────
+      const peers = new Map();   // peerId -> RTCPeerConnection
+      const iceBuf = new Map();  // peerId -> [candidates] (buffer trước khi có remoteDesc)
+      let localStream = null;
+      let camOn = true;
+      let micOn = true;
+      let myId = null;
 
-      function addLocalVideo() {
-        const wrapper = document.createElement("div");
-        wrapper.className = "video-wrapper";
-        wrapper.id = "local-wrapper";
+      const grid = document.getElementById("video-grid");
+      const statusEl = document.getElementById("status");
+      const peerCount = document.getElementById("peer-count");
 
-        const video = document.createElement("video");
-        video.srcObject = localStream;
-        video.autoplay = true;
-        video.muted = true; // tắt tiếng local để không echo
-        video.playsInline = true;
+      // ─── Socket ───────────────────────────────────────────────
+      const socket = io();
 
-        const label = document.createElement("div");
-        label.className = "label";
-        label.textContent = "Bạn";
-
-        const overlay = document.createElement("div");
-        overlay.className = "cam-off-overlay";
-        overlay.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-            <line x1="1" y1="1" x2="23" y2="23" stroke-width="2"/>
-          </svg>
-          <span>Camera tắt</span>`;
-
-        wrapper.appendChild(video);
-        wrapper.appendChild(overlay);
-        wrapper.appendChild(label);
-        document.getElementById("video-grid").appendChild(wrapper);
-      }
-
-      // =====================
-      // 2. Tạo PeerConnection
-      // =====================
-      function createPeerConnection(peerId) {
-        const pc = new RTCPeerConnection(ICE_SERVERS);
-
-        // Thêm local tracks
-        if (localStream) {
-          localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-        }
-
-        // Nhận remote stream
-        pc.ontrack = (event) => {
-          const remoteStream = event.streams[0];
-          if (!document.getElementById("video-" + peerId)) {
-            addRemoteVideo(peerId, remoteStream);
-          }
-        };
-
-        // Gửi ICE candidate
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            socket.emit("ice-candidate", { to: peerId, candidate: event.candidate });
-          }
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-            removeVideo(peerId);
-          }
-        };
-
-        peerConnections[peerId] = pc;
-        return pc;
-      }
-
-      function addRemoteVideo(peerId, stream) {
-        const grid = document.getElementById("video-grid");
-
-        const wrapper = document.createElement("div");
-        wrapper.className = "video-wrapper";
-        wrapper.id = "video-" + peerId;
-
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.id = "stream-" + peerId;
-
-        const label = document.createElement("div");
-        label.className = "label";
-        label.textContent = "Người dùng " + peerId.slice(0, 5);
-
-        const overlay = document.createElement("div");
-        overlay.className = "cam-off-overlay";
-        overlay.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-            <line x1="1" y1="1" x2="23" y2="23" stroke-width="2"/>
-          </svg>
-          <span>Camera tắt</span>`;
-
-        wrapper.appendChild(video);
-        wrapper.appendChild(overlay);
-        wrapper.appendChild(label);
-        grid.appendChild(wrapper);
-        updatePeerCount();
-      }
-
-      function removeVideo(peerId) {
-        const el = document.getElementById("video-" + peerId);
-        if (el) el.remove();
-        if (peerConnections[peerId]) {
-          peerConnections[peerId].close();
-          delete peerConnections[peerId];
-        }
-        updatePeerCount();
-      }
-
-      // =====================
-      // 3. Signaling events
-      // =====================
-      socket.on("all-peers", async (peers) => {
-        // Người mới: gửi offer cho tất cả peer cũ
-        for (const peerId of peers) {
-          const pc = createPeerConnection(peerId);
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit("offer", { to: peerId, offer });
-        }
-        updatePeerCount();
+      socket.on("connect", () => {
+        myId = socket.id;
+        setStatus("Đã kết nối", false);
+        startMedia();
       });
 
-      socket.on("peer-joined", (peerId) => {
-        // Peer cũ chờ offer từ người mới — không làm gì ở đây
-        updatePeerCount();
+      socket.on("disconnect", () => setStatus("Mất kết nối", true));
+
+      // Nhận danh sách user cũ -> mình (newcomer) sẽ initiate offer
+      socket.on("existing-users", async (userIds) => {
+        console.log("[existing-users]", userIds);
+        for (const uid of userIds) {
+          await createOffer(uid);
+        }
+        updateCount();
       });
 
+      // Peer mới join -> họ sẽ gửi offer đến mình, mình chờ
+      socket.on("user-joined", ({ userId }) => {
+        console.log("[user-joined]", userId);
+        // Không làm gì, chờ offer từ userId
+        updateCount();
+      });
+
+      // Nhận offer -> trả answer
       socket.on("offer", async ({ from, offer }) => {
-        const pc = createPeerConnection(from);
+        console.log("[offer from]", from);
+        const pc = getOrCreatePC(from);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await flushIceBuf(from);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit("answer", { to: from, answer });
       });
 
+      // Nhận answer
       socket.on("answer", async ({ from, answer }) => {
-        const pc = peerConnections[from];
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log("[answer from]", from);
+        const pc = peers.get(from);
+        if (!pc) return;
+        if (pc.signalingState === "have-local-offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          await flushIceBuf(from);
+        }
       });
 
+      // Nhận ICE candidate
       socket.on("ice-candidate", async ({ from, candidate }) => {
-        const pc = peerConnections[from];
-        if (pc && candidate) {
+        const pc = peers.get(from);
+        if (!pc) return;
+
+        if (pc.remoteDescription && pc.remoteDescription.type) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (e) {}
+          } catch (e) {
+            console.warn("addIceCandidate error:", e);
+          }
+        } else {
+          // Buffer lại chờ setRemoteDescription
+          if (!iceBuf.has(from)) iceBuf.set(from, []);
+          iceBuf.get(from).push(candidate);
         }
       });
 
-      socket.on("peer-left", (peerId) => {
-        removeVideo(peerId);
+      // User rời đi
+      socket.on("user-left", ({ userId }) => {
+        console.log("[user-left]", userId);
+        closePeer(userId);
+        updateCount();
       });
 
-      // =====================
-      // 4. Bật/tắt cam, mic
-      // =====================
+      // ─── Media ────────────────────────────────────────────────
+      async function startMedia() {
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true,
+          });
+        } catch (e) {
+          console.warn("Không lấy được media:", e);
+          localStream = new MediaStream();
+        }
+        addVideoEl("local", localStream, "Bạn", true);
+        socket.emit("join");
+      }
+
+      // ─── RTCPeerConnection factory ────────────────────────────
+      function getOrCreatePC(peerId) {
+        if (peers.has(peerId)) return peers.get(peerId);
+
+        const pc = new RTCPeerConnection(ICE_SERVERS);
+        peers.set(peerId, pc);
+        iceBuf.set(peerId, []);
+
+        // Thêm local tracks
+        if (localStream) {
+          localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+        }
+
+        // Nhận remote track -> hiện video
+        pc.ontrack = ({ streams }) => {
+          const stream = streams[0];
+          if (!stream) return;
+          const existing = document.getElementById(`video-${peerId}`);
+          if (existing) {
+            existing.srcObject = stream;
+          } else {
+            addVideoEl(peerId, stream, shortId(peerId), false);
+          }
+          updateCount();
+        };
+
+        // Gửi ICE candidate
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            socket.emit("ice-candidate", { to: peerId, candidate });
+          }
+        };
+
+        // Log state
+        pc.onconnectionstatechange = () => {
+          console.log(`[${shortId(peerId)}] connectionState:`, pc.connectionState);
+          if (pc.connectionState === "failed") {
+            pc.restartIce();
+          }
+          if (["disconnected", "closed", "failed"].includes(pc.connectionState)) {
+            closePeer(peerId);
+            updateCount();
+          }
+        };
+
+        pc.onsignalingstatechange = () => {
+          console.log(`[${shortId(peerId)}] signalingState:`, pc.signalingState);
+        };
+
+        return pc;
+      }
+
+      async function createOffer(peerId) {
+        const pc = getOrCreatePC(peerId);
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit("offer", { to: peerId, offer });
+        } catch (e) {
+          console.error("createOffer error:", e);
+        }
+      }
+
+      async function flushIceBuf(peerId) {
+        const buf = iceBuf.get(peerId) || [];
+        const pc = peers.get(peerId);
+        if (!pc) return;
+        for (const c of buf) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(c));
+          } catch (e) {
+            console.warn("flush ICE error:", e);
+          }
+        }
+        iceBuf.set(peerId, []);
+      }
+
+      function closePeer(peerId) {
+        const pc = peers.get(peerId);
+        if (pc) {
+          pc.close();
+          peers.delete(peerId);
+          iceBuf.delete(peerId);
+        }
+        const el = document.getElementById(`wrapper-${peerId}`);
+        if (el) el.remove();
+      }
+
+      // ─── Video DOM ────────────────────────────────────────────
+      function addVideoEl(id, stream, label, muted) {
+        if (document.getElementById(`wrapper-${id}`)) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "video-wrapper";
+        wrapper.id = `wrapper-${id}`;
+
+        const video = document.createElement("video");
+        video.id = `video-${id}`;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = muted;
+        video.srcObject = stream;
+
+        const lbl = document.createElement("div");
+        lbl.className = "label";
+        lbl.textContent = label;
+
+        const overlay = document.createElement("div");
+        overlay.className = "cam-off-overlay";
+        overlay.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+            <line x1="3" y1="3" x2="21" y2="21"/>
+          </svg>
+          <span>Cam tắt</span>`;
+
+        wrapper.appendChild(video);
+        wrapper.appendChild(lbl);
+        wrapper.appendChild(overlay);
+        grid.appendChild(wrapper);
+      }
+
+      // ─── Controls ─────────────────────────────────────────────
       function toggleCam() {
-        const videoTracks = localStream ? localStream.getVideoTracks() : [];
-        if (videoTracks.length === 0) return;
-
+        if (!localStream) return;
         camOn = !camOn;
-        videoTracks.forEach((t) => (t.enabled = camOn));
-
-        const wrapper = document.getElementById("local-wrapper");
-        if (wrapper) {
-          wrapper.classList.toggle("cam-off", !camOn);
-        }
-        updateControlUI();
+        localStream.getVideoTracks().forEach((t) => (t.enabled = camOn));
+        const btn = document.getElementById("btn-cam");
+        const wrapper = document.getElementById("wrapper-local");
+        btn.classList.toggle("off", !camOn);
+        if (wrapper) wrapper.classList.toggle("cam-off", !camOn);
+        btn.innerHTML = camOn
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg> Camera`
+          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg> Camera`;
       }
 
       function toggleMic() {
-        const audioTracks = localStream ? localStream.getAudioTracks() : [];
-        if (audioTracks.length === 0) return;
-
+        if (!localStream) return;
         micOn = !micOn;
-        audioTracks.forEach((t) => (t.enabled = micOn));
-        updateControlUI();
+        localStream.getAudioTracks().forEach((t) => (t.enabled = micOn));
+        const btn = document.getElementById("btn-mic");
+        btn.classList.toggle("off", !micOn);
+        btn.innerHTML = micOn
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg> Micro`
+          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><line x1="3" y1="3" x2="21" y2="21"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg> Micro`;
       }
 
-      function updateControlUI() {
-        const btnCam = document.getElementById("btn-cam");
-        const btnMic = document.getElementById("btn-mic");
-
-        btnCam.classList.toggle("off", !camOn);
-        btnCam.querySelector("span").textContent = camOn ? "Camera" : "Cam tắt";
-
-        btnMic.classList.toggle("off", !micOn);
-        btnMic.querySelector("span").textContent = micOn ? "Micro" : "Mic tắt";
+      // ─── Helpers ──────────────────────────────────────────────
+      function setStatus(msg, isErr) {
+        statusEl.textContent = msg;
+        statusEl.className = isErr ? "error" : "";
       }
 
-      function updatePeerCount() {
-        const count = Object.keys(peerConnections).length + 1; // +1 = bản thân
-        document.getElementById("peer-count").textContent = count;
+      function updateCount() {
+        const n = peers.size + 1;
+        peerCount.textContent = `👥 ${n} người`;
       }
 
-      // =====================
-      // 5. Start
-      // =====================
-      initMedia();
+      function shortId(id) {
+        return "User-" + id.slice(0, 4).toUpperCase();
+      }
     </script>
   </body>
 </html>
