@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebRTC Nhóm - Bật/Tắt Cam & Mic</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(145deg, #1a1e2c 0%, #2a2f3f 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #eee;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .join-panel {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 28px;
+            padding: 20px 28px;
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .room-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .room-controls input {
+            background: #2d3348;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 60px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            border: 1px solid #4a5070;
+        }
+
+        .room-controls input:focus {
+            border-color: #7c8aff;
+            background: #1e2338;
+        }
+
+        button {
+            background: #3d4f8c;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 1rem;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #5d74c5;
+            transform: scale(0.98);
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .cam-btn { background: #2c3e66; }
+        .mic-btn { background: #2c3e66; }
+        .cam-btn.off { background: #8b3c3c; }
+        .mic-btn.off { background: #8b3c3c; }
+        .leave-btn { background: #922d2d; }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .video-card {
+            background: #11131f;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            position: relative;
+            border: 1px solid #333a55;
+        }
+
+        .video-card video {
+            width: 100%;
+            height: auto;
+            background: #000;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .video-label {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            padding: 5px 12px;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .mute-badge {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 30px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .status-text {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 700px) {
+            .join-panel { flex-direction: column; align-items: stretch; }
+            .video-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="join-panel">
+        <div class="room-controls">
+            <input type="text" id="roomName" placeholder="Tên phòng" value="mainroom">
+            <input type="text" id="userName" placeholder="Tên của bạn" value="Khách">
+            <button id="joinBtn">📞 Vào phòng</button>
+        </div>
+        <div class="controls" style="display: none;" id="actionControls">
+            <button id="toggleCamBtn" class="cam-btn">📷 Tắt Camera</button>
+            <button id="toggleMicBtn" class="mic-btn">🎤 Tắt Mic</button>
+            <button id="leaveBtn" class="leave-btn">🚪 Rời phòng</button>
+        </div>
+    </div>
+    <div id="videoGrid" class="video-grid"></div>
+    <div id="statusMsg" class="status-text">⚡ Kết nối WebRTC: chưa tham gia phòng</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const roomInput = document.getElementById('roomName');
+    const userNameInput = document.getElementById('userName');
+    const joinBtn = document.getElementById('joinBtn');
+    const actionControls = document.getElementById('actionControls');
+    const toggleCamBtn = document.getElementById('toggleCamBtn');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const videoGrid = document.getElementById('videoGrid');
+    const statusDiv = document.getElementById('statusMsg');
+
+    let socket = null;
+    let localStream = null;
+    let localVideoElement = null;
+    let currentRoom = null;
+    let currentUserName = '';
+    let mySocketId = null;
+    let peers = new Map();
+
+    const iceServers = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+
+    let cameraEnabled = true;
+    let micEnabled = true;
+
+    function updateLocalBadge() {
+        if (!localVideoElement) return;
+        const card = localVideoElement.closest('.video-card');
+        if (card) {
+            let badge = card.querySelector('.mute-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'mute-badge';
+                card.appendChild(badge);
+            }
+            if (!cameraEnabled && !micEnabled) badge.innerText = '🔇 📷❌';
+            else if (!cameraEnabled) badge.innerText = '📷❌';
+            else if (!micEnabled) badge.innerText = '🎤❌';
+            else badge.innerText = '🎤📷✔️';
+        }
+    }
+
+    function createVideoCard(peerId, displayName, isLocal = false) {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.id = `video-card-${peerId}`;
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        if (isLocal) {
+            video.muted = true;
+            video.srcObject = localStream;
+            localVideoElement = video;
+        }
+        video.style.transform = isLocal ? 'scaleX(-1)' : 'scaleX(1)';
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.innerText = isLocal ? `${displayName} (Bạn)` : displayName;
+        const muteBadge = document.createElement('div');
+        muteBadge.className = 'mute-badge';
+        if (isLocal) {
+            muteBadge.innerText = '🎤📷✔️';
+        } else {
+            muteBadge.innerText = '🔊 ...';
+        }
+        card.appendChild(video);
+        card.appendChild(label);
+        card.appendChild(muteBadge);
+        return { card, video };
+    }
+
+    function renderAllVideos() {
+        document.querySelectorAll('.video-card').forEach(card => card.remove());
+        if (localStream && mySocketId) {
+            const { card, video } = createVideoCard(mySocketId, currentUserName, true);
+            if (localVideoElement) video.srcObject = localStream;
+            localVideoElement = video;
+            videoGrid.appendChild(card);
+            updateLocalBadge();
+        }
+        for (let [socketId, peerData] of peers.entries()) {
+            if (socketId === mySocketId) continue;
+            const { stream, userName, videoElement } = peerData;
+            if (stream) {
+                const { card, video } = createVideoCard(socketId, userName, false);
+                video.srcObject = stream;
+                peerData.videoElement = video;
+                videoGrid.appendChild(card);
+                const badge = card.querySelector('.mute-badge');
+                const videoTrack = stream.getVideoTracks()[0];
+                const audioTrack = stream.getAudioTracks()[0];
+                if (videoTrack && audioTrack) {
+                    if (!videoTrack.enabled && !audioTrack.enabled) badge.innerText = '🔇 📷❌';
+                    else if (!videoTrack.enabled) badge.innerText = '📷❌';
+                    else if (!audioTrack.enabled) badge.innerText = '🎤❌';
+                    else badge.innerText = '🎤📷✔️';
+                }
+            }
+        }
+    }
+
+    function removePeer(socketId) {
+        const peerData = peers.get(socketId);
+        if (peerData) {
+            if (peerData.pc) peerData.pc.close();
+            if (peerData.videoElement) peerData.videoElement.remove();
+            peers.delete(socketId);
+        }
+        const card = document.getElementById(`video-card-${socketId}`);
+        if (card) card.remove();
+    }
+
+    async function createPeerConnection(targetSocketId, isInitiator = true) {
+        if (peers.has(targetSocketId)) {
+            const old = peers.get(targetSocketId);
+            if (old.pc) old.pc.close();
+            peers.delete(targetSocketId);
+        }
+        const pc = new RTCPeerConnection(iceServers);
+        const peerData = { pc, userName: '', stream: null, videoElement: null };
+        peers.set(targetSocketId, peerData);
+        if (localStream) {
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        }
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', { target: targetSocketId, candidate: event.candidate, room: currentRoom });
+            }
+        };
+        pc.ontrack = (event) => {
+            const [stream] = event.streams;
+            if (stream) {
+                peerData.stream = stream;
+                if (!peerData.videoElement) {
+                    const video = document.createElement('video');
+                    video.autoplay = true;
+                    video.playsInline = true;
+                    video.srcObject = stream;
+                    peerData.videoElement = video;
+                }
+                renderAllVideos();
+            }
+        };
+        if (isInitiator) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('offer', { target: targetSocketId, offer, room: currentRoom, senderName: currentUserName });
+        }
+        return pc;
+    }
+
+    async function handleOffer(data) {
+        const { from, offer, senderName } = data;
+        let pc;
+        if (peers.has(from) && peers.get(from).pc) {
+            pc = peers.get(from).pc;
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('answer', { target: from, answer, room: currentRoom });
+            peers.get(from).userName = senderName;
+        } else {
+            const newPc = new RTCPeerConnection(iceServers);
+            const peerData = { pc: newPc, userName: senderName, stream: null, videoElement: null };
+            peers.set(from, peerData);
+            if (localStream) localStream.getTracks().forEach(t => newPc.addTrack(t, localStream));
+            newPc.onicecandidate = (e) => {
+                if (e.candidate) socket.emit('ice-candidate', { target: from, candidate: e.candidate, room: currentRoom });
+            };
+            newPc.ontrack = (e) => {
+                const [stream] = e.streams;
+                if (stream) {
+                    peerData.stream = stream;
+                    renderAllVideos();
+                }
+            };
+            await newPc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await newPc.createAnswer();
+            await newPc.setLocalDescription(answer);
+            socket.emit('answer', { target: from, answer, room: currentRoom });
+        }
+        renderAllVideos();
+    }
+
+    async function handleAnswer(data) {
+        const { from, answer } = data;
+        const peerData = peers.get(from);
+        if (peerData && peerData.pc) await peerData.pc.setRemoteDescription(new RTCSessionDescription(answer));
+    }
+
+    async function handleIceCandidate(data) {
+        const { from, candidate } = data;
+        const peerData = peers.get(from);
+        if (peerData && peerData.pc) await peerData.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+
+    async function joinRoom() {
+        const room = roomInput.value.trim();
+        const username = userNameInput.value.trim() || "Anonymous";
+        if (!room) return alert("Nhập tên phòng");
+        if (socket && currentRoom) leaveRoom();
+        currentRoom = room;
+        currentUserName = username;
+        socket = io();
+        mySocketId = socket.id;
+        socket.on('connect', () => {
+            statusDiv.innerText = `✅ Đã kết nối, vào phòng ${room}`;
+            socket.emit('join-room', { room, userName: username });
+        });
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            cameraEnabled = true; micEnabled = true;
+            actionControls.style.display = "flex";
+            toggleCamBtn.innerText = "📷 Tắt Camera";
+            toggleMicBtn.innerText = "🎤 Tắt Mic";
+            toggleCamBtn.classList.remove('off');
+            toggleMicBtn.classList.remove('off');
+            renderAllVideos();
+        } catch (err) {
+            statusDiv.innerText = "⚠️ Lỗi truy cập camera/microphone!";
+            return;
+        }
+        socket.on('existing-users', async (users) => {
+            for (let user of users) {
+                if (user.socketId === socket.id) continue;
+                if (!peers.has(user.socketId)) {
+                    await createPeerConnection(user.socketId, true);
+                    peers.get(user.socketId).userName = user.userName;
+                }
+            }
+            renderAllVideos();
+        });
+        socket.on('user-connected', async (data) => {
+            if (data.socketId === mySocketId) return;
+            if (!peers.has(data.socketId)) {
+                await createPeerConnection(data.socketId, true);
+                peers.get(data.socketId).userName = data.userName;
+            }
+            renderAllVideos();
+        });
+        socket.on('offer', handleOffer);
+        socket.on('answer', handleAnswer);
+        socket.on('ice-candidate', handleIceCandidate);
+        socket.on('user-disconnected', (socketId) => {
+            removePeer(socketId);
+            renderAllVideos();
+        });
+    }
+
+    function leaveRoom() {
+        if (socket) {
+            socket.emit('leave-room', { room: currentRoom });
+            socket.disconnect();
+        }
+        for (let [id, data] of peers.entries()) if (data.pc) data.pc.close();
+        peers.clear();
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+        localVideoElement = null;
+        actionControls.style.display = "none";
+        videoGrid.innerHTML = "";
+        statusDiv.innerText = "⚡ Đã rời phòng";
+        currentRoom = null;
+    }
+
+    function toggleCamera() {
+        if (!localStream) return;
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            cameraEnabled = !cameraEnabled;
+            videoTrack.enabled = cameraEnabled;
+            toggleCamBtn.innerText = cameraEnabled ? "📷 Tắt Camera" : "📷 Bật Camera";
+            toggleCamBtn.classList.toggle('off', !cameraEnabled);
+            updateLocalBadge();
+        }
+    }
+
+    function toggleMicrophone() {
+        if (!localStream) return;
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            micEnabled = !micEnabled;
+            audioTrack.enabled = micEnabled;
+            toggleMicBtn.innerText = micEnabled ? "🎤 Tắt Mic" : "🎤 Bật Mic";
+            toggleMicBtn.classList.toggle('off', !micEnabled);
+            updateLocalBadge();
+        }
+    }
+
+    joinBtn.onclick = joinRoom;
+    leaveBtn.onclick = leaveRoom;
+    toggleCamBtn.onclick = toggleCamera;
+    toggleMicBtn.onclick = toggleMicrophone;
+    actionControls.style.display = "none";
+</script>
+</body>
+</html>
