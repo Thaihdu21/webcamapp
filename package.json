@@ -1,7 +1,7 @@
 {
-  "name": "webrtc-multi-user",
+  "name": "webrtc-multi-room",
   "version": "1.0.0",
-  "description": "WebRTC multi-user video chat with cam/mic toggle",
+  "description": "WebRTC video conference with camera/mic toggle",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,8 +9,5 @@
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.6.1"
-  },
-  "engines": {
-    "node": ">=16.x"
   }
 }
