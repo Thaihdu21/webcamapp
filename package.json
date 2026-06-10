@@ -1,5 +1,5 @@
 {
-  "name": "webrtc-multiuser",
+  "name": "rtc-multi-user",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
