@@ -6,71 +6,63 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // Cấu hình để tương thích tốt với mobile, giảm thời gian timeout
+  cors: { origin: '*' },
   pingTimeout: 60000,
-  pingInterval: 25000,
-  transports: ['websocket', 'polling']   // ưu tiên websocket
+  pingInterval: 25000
 });
 
-// Phục vụ file tĩnh trong thư mục public (chứa index.html)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Phòng mặc định (tất cả người dùng đều vào cùng một phòng, không cần mã)
-const ROOM_NAME = 'global-room';
-
-// Lưu danh sách socket id đang online trong phòng
-let onlineUsers = new Set();
+// Dùng một phòng chung duy nhất - không cần mã phòng
+const ROOM = 'main';
+const roomUsers = new Map(); // socketId -> { id, name }
 
 io.on('connection', (socket) => {
-  console.log(`✅ User connected: ${socket.id}`);
+  console.log('User connected:', socket.id);
 
-  // Tham gia phòng chung
-  socket.join(ROOM_NAME);
-  onlineUsers.add(socket.id);
+  // Gửi danh sách người đang online cho người mới vào
+  socket.on('join', (userData) => {
+    roomUsers.set(socket.id, { id: socket.id, ...userData });
+    socket.join(ROOM);
 
-  // Gửi danh sách user hiện có (trừ chính mình) cho client vừa kết nối
-  const otherUsers = Array.from(onlineUsers).filter(id => id !== socket.id);
-  socket.emit('existing-users', otherUsers);
-  console.log(`📢 existing-users sent to ${socket.id}:`, otherUsers);
-
-  // Thông báo cho mọi người trong phòng (trừ chính mình) có người mới vào
-  socket.broadcast.to(ROOM_NAME).emit('user-joined', socket.id);
-
-  // ---- Xử lý tín hiệu WebRTC (offer, answer, ice) ----
-  socket.on('offer', ({ target, offer }) => {
-    console.log(`📡 Offer from ${socket.id} to ${target}`);
-    io.to(target).emit('offer', { from: socket.id, offer });
-  });
-
-  socket.on('answer', ({ target, answer }) => {
-    console.log(`📡 Answer from ${socket.id} to ${target}`);
-    io.to(target).emit('answer', { from: socket.id, answer });
-  });
-
-  socket.on('ice-candidate', ({ target, candidate }) => {
-    console.log(`🧊 ICE candidate from ${socket.id} to ${target}`);
-    io.to(target).emit('ice-candidate', { from: socket.id, candidate });
-  });
-
-  // Trạng thái bật/tắt camera/mic (để hiển thị icon trên remote)
-  socket.on('user-media-status', (data) => {
-    socket.broadcast.to(ROOM_NAME).emit('peer-media-status', {
-      userId: socket.id,
-      videoEnabled: data.videoEnabled,
-      audioEnabled: data.audioEnabled
+    // Gửi cho người mới biết ai đang có mặt
+    const others = [];
+    roomUsers.forEach((user, id) => {
+      if (id !== socket.id) others.push(user);
     });
+    socket.emit('existing-users', others);
+
+    // Thông báo cho những người còn lại
+    socket.to(ROOM).emit('user-joined', { id: socket.id, ...userData });
+    console.log(`Room users: ${roomUsers.size}`);
   });
 
-  // Xử lý ngắt kết nối
+  // Relay WebRTC signaling
+  socket.on('offer', ({ to, offer }) => {
+    io.to(to).emit('offer', { from: socket.id, offer });
+  });
+
+  socket.on('answer', ({ to, answer }) => {
+    io.to(to).emit('answer', { from: socket.id, answer });
+  });
+
+  socket.on('ice-candidate', ({ to, candidate }) => {
+    io.to(to).emit('ice-candidate', { from: socket.id, candidate });
+  });
+
+  // Thông báo trạng thái mic/cam
+  socket.on('media-state', (state) => {
+    socket.to(ROOM).emit('user-media-state', { id: socket.id, ...state });
+  });
+
   socket.on('disconnect', () => {
-    console.log(`❌ User disconnected: ${socket.id}`);
-    onlineUsers.delete(socket.id);
-    socket.broadcast.to(ROOM_NAME).emit('user-left', socket.id);
+    roomUsers.delete(socket.id);
+    io.to(ROOM).emit('user-left', socket.id);
+    console.log('User disconnected:', socket.id);
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-  console.log(`📱 Optimized for mobile devices (Android/iOS low-end)`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
