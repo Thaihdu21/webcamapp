@@ -1,972 +1,903 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
-<title>WebRTC Live</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>VideoCall</title>
 <style>
-  /* ───────────── RESET & BASE ───────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg: #0f0f13;
-    --surface: #1a1a24;
-    --surface2: #23233a;
-    --accent: #7c6cf8;
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c27;
+    --border: #2a2a3a;
+    --accent: #7c6af7;
     --accent2: #a78bfa;
-    --danger: #ef4444;
-    --success: #22c55e;
-    --warn: #f59e0b;
-    --text: #f1f5f9;
-    --text2: #94a3b8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --text: #f0f0ff;
+    --text2: #8888aa;
     --radius: 16px;
-    --bar-h: 72px;
+    --bar-h: 80px;
   }
 
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
   html, body {
-    height: 100%;
+    width: 100%; height: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  /* ───────────── LAYOUT ───────────── */
-  #app {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    height: 100vh; /* fallback */
+  /* ── TOP BAR ── */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 52px;
+    background: rgba(10,10,15,0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
   }
 
-  /* Header */
-  #header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid rgba(124,108,248,.2);
-    flex-shrink: 0;
-    z-index: 10;
-  }
-
-  #header .logo {
+  #topbar .logo {
     display: flex; align-items: center; gap: 8px;
-    font-weight: 700; font-size: 1.05rem; letter-spacing: .5px;
+    font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
   }
-  #header .logo .dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--success);
-    animation: pulse 2s infinite;
-  }
+  #topbar .logo svg { color: var(--accent); }
 
   #peer-count {
-    font-size: .8rem;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text2);
     background: var(--surface2);
-    border: 1px solid rgba(124,108,248,.3);
-    padding: 4px 12px;
-    border-radius: 20px;
-    color: var(--accent2);
-    font-weight: 600;
+    padding: 5px 12px; border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+  #peer-count .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:.5; transform:scale(1.3); }
   }
 
-  /* Video Grid */
+  /* ── VIDEO GRID ── */
   #grid-wrap {
-    flex: 1;
+    position: fixed;
+    top: 52px; left: 0; right: 0;
+    bottom: var(--bar-h);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 10px;
     -webkit-overflow-scrolling: touch;
+    padding: 8px;
+    display: flex;
+    align-items: flex-start;
   }
 
   #video-grid {
-    display: grid;
-    gap: 8px;
     width: 100%;
-    height: 100%;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    transition: all .3s ease;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-content: start;
   }
 
-  /* Grid layouts theo số người */
-  #video-grid.count-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-  #video-grid.count-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
-  #video-grid.count-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  #video-grid.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  #video-grid.count-5,
-  #video-grid.count-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  #video-grid[class*="count-"]:not(.count-1):not(.count-2):not(.count-3):not(.count-4):not(.count-5):not(.count-6) {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  /* Solo: full width */
+  #video-grid.count-1 { grid-template-columns: 1fr; }
+  /* 2 people: 1 column each */
+  #video-grid.count-2 { grid-template-columns: 1fr 1fr; }
+  /* 3+: 2 cols */
+  #video-grid.count-3,
+  #video-grid.count-4 { grid-template-columns: 1fr 1fr; }
+  /* 5+: 2 cols still (scrollable) */
 
-  /* Mobile: dọc thì 1 cột cho 1-2, 2 cột cho 3+ */
-  @media (max-width: 600px) and (orientation: portrait) {
-    #video-grid.count-2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
-    #video-grid.count-3,
-    #video-grid.count-4 { grid-template-columns: 1fr 1fr; }
-    #video-grid.count-5,
-    #video-grid.count-6 { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr); }
-  }
-
-  /* Video tile */
   .video-tile {
     position: relative;
+    aspect-ratio: 3/4;
     background: var(--surface);
     border-radius: var(--radius);
     overflow: hidden;
-    aspect-ratio: 4/3;
-    border: 2px solid transparent;
-    transition: border-color .3s;
+    border: 1.5px solid var(--border);
+    transition: border-color 0.25s;
   }
-  .video-tile.speaking {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(124,108,248,.3);
-  }
-  .video-tile.local {
-    border-color: rgba(124,108,248,.4);
-  }
+
+  /* Local tile: slightly different accent border */
+  .video-tile.local { border-color: var(--accent); }
 
   .video-tile video {
     width: 100%; height: 100%;
     object-fit: cover;
     display: block;
     background: #000;
-    /* Quan trọng cho iOS/Android */
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    will-change: transform;
   }
-  .video-tile.local video {
-    transform: scaleX(-1); /* mirror local */
-    -webkit-transform: scaleX(-1);
-  }
+  /* Mirror local cam */
+  .video-tile.local video { transform: scaleX(-1); }
 
-  /* Avatar khi tắt cam */
-  .video-tile .avatar-overlay {
+  /* Avatar fallback */
+  .video-tile .avatar {
     position: absolute; inset: 0;
     display: none;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: center; justify-content: center;
     background: var(--surface2);
     gap: 10px;
   }
-  .video-tile.cam-off .avatar-overlay { display: flex; }
-  .video-tile.cam-off video { opacity: 0; }
-
-  .avatar-circle {
-    width: 64px; height: 64px;
-    border-radius: 50%;
+  .video-tile .avatar.show { display: flex; }
+  .video-tile .avatar .av-icon {
+    width: 56px; height: 56px; border-radius: 50%;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem; font-weight: 700; color: #fff;
+    font-size: 24px;
   }
-  .avatar-name {
-    font-size: .8rem; color: var(--text2); font-weight: 500;
+  .video-tile .avatar span {
+    font-size: 12px; color: var(--text2);
   }
 
-  /* Badge tên + mic */
-  .video-tile .tile-info {
-    position: absolute;
-    bottom: 8px; left: 8px;
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(0,0,0,.55);
-    backdrop-filter: blur(6px);
-    border-radius: 20px;
-    padding: 4px 10px 4px 6px;
-    font-size: .75rem;
-    font-weight: 600;
-    pointer-events: none;
+  /* Tile label */
+  .video-tile .label {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px 10px 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,.7));
+    display: flex; align-items: center; justify-content: space-between;
   }
-  .mic-icon {
-    font-size: .85rem;
-    transition: color .2s;
+  .video-tile .label .name {
+    font-size: 12px; font-weight: 600; color: #fff;
+    max-width: 80%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .mic-icon.muted { color: var(--danger); }
-
-  /* Kết nối overlay */
-  .connecting-overlay {
-    position: absolute; inset: 0;
-    background: rgba(15,15,19,.85);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 12px; border-radius: var(--radius);
-    font-size: .85rem; color: var(--text2);
-  }
-  .spinner {
-    width: 36px; height: 36px;
-    border: 3px solid rgba(124,108,248,.2);
-    border-top-color: var(--accent);
+  .video-tile .label .mic-status {
+    width: 20px; height: 20px;
+    background: rgba(255,255,255,.15);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    display: flex; align-items: center; justify-content: center;
   }
+  .video-tile .label .mic-status.muted { background: rgba(239,68,68,.5); }
 
-  /* ───────────── CONTROL BAR ───────────── */
+  /* Speaking indicator */
+  .video-tile.speaking { border-color: var(--green) !important; }
+
+  /* ── CONTROL BAR ── */
   #controls {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-top: 1px solid rgba(124,108,248,.15);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    min-height: var(--bar-h);
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-h);
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    gap: 16px;
+    padding: 0 20px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .ctrl-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    background: var(--surface2);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 14px;
-    width: 58px; height: 58px;
-    cursor: pointer;
-    transition: background .18s, transform .1s;
+    width: 52px; height: 52px; border-radius: 50%;
+    border: none; outline: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s, background 0.2s;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    user-select: none;
+    flex-shrink: 0;
   }
-  .ctrl-btn:active { transform: scale(.93); }
-  .ctrl-btn .icon { font-size: 1.4rem; line-height: 1; }
-  .ctrl-btn .label { font-size: .6rem; color: var(--text2); font-weight: 500; letter-spacing: .3px; }
+  .ctrl-btn:active { transform: scale(0.88); }
 
-  .ctrl-btn.active { background: rgba(124,108,248,.25); border-color: var(--accent); }
-  .ctrl-btn.active .label { color: var(--accent2); }
+  .ctrl-btn.on  { background: var(--surface2); border: 1.5px solid var(--border); }
+  .ctrl-btn.off { background: rgba(239,68,68,.18); border: 1.5px solid rgba(239,68,68,.4); }
 
-  .ctrl-btn.danger { background: rgba(239,68,68,.15); border-color: var(--danger); }
-  .ctrl-btn.danger .icon { color: var(--danger); }
-  .ctrl-btn.danger .label { color: var(--danger); }
+  .ctrl-btn svg { pointer-events: none; }
 
-  /* ───────────── TOAST ───────────── */
-  #toast-wrap {
-    position: fixed;
-    top: 70px; left: 50%; transform: translateX(-50%);
-    z-index: 999;
-    display: flex; flex-direction: column; gap: 8px;
-    pointer-events: none;
-    width: min(320px, 90vw);
+  /* Hang-up button */
+  .ctrl-btn.hangup {
+    background: var(--red) !important;
+    border: none !important;
+    width: 56px; height: 56px;
   }
-  .toast {
+
+  /* Swap camera button */
+  .ctrl-btn.swap { background: var(--surface2); border: 1.5px solid var(--border); }
+  .ctrl-btn.swap:active { background: var(--accent); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
     background: var(--surface2);
-    border: 1px solid rgba(124,108,248,.3);
-    border-radius: 12px;
-    padding: 10px 16px;
-    font-size: .82rem;
+    border: 1px solid var(--border);
     color: var(--text);
-    animation: fadeInDown .3s ease, fadeOut .3s ease 2.7s forwards;
-    box-shadow: 0 4px 20px rgba(0,0,0,.4);
-    text-align: center;
+    padding: 9px 18px;
+    border-radius: 24px;
+    font-size: 13px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 200;
+    white-space: nowrap;
+    max-width: 90vw;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
+  #toast.show { opacity: 1; }
 
-  /* ───────────── LOADING SCREEN ───────────── */
-  #loading-screen {
-    position: fixed; inset: 0;
+  /* ── LOADING OVERLAY ── */
+  #loading {
+    position: fixed; inset: 0; z-index: 300;
     background: var(--bg);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 20px; z-index: 1000;
-    transition: opacity .4s;
+    gap: 20px;
   }
-  #loading-screen h2 { font-size: 1.4rem; font-weight: 700; }
-  #loading-screen p { font-size: .9rem; color: var(--text2); text-align: center; padding: 0 24px; }
-  #loading-screen .big-spinner {
-    width: 56px; height: 56px;
-    border: 4px solid rgba(124,108,248,.2);
+  #loading .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s linear infinite;
   }
-  #loading-screen .err { color: var(--danger); }
-  #retry-btn {
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { color: var(--text2); font-size: 14px; }
+  #loading.hidden { display: none; }
+
+  /* ── ERROR SCREEN ── */
+  #error-screen {
+    position: fixed; inset: 0; z-index: 300;
+    background: var(--bg);
     display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; padding: 32px;
+    text-align: center;
+  }
+  #error-screen.show { display: flex; }
+  #error-screen .err-icon { font-size: 48px; }
+  #error-screen h2 { font-size: 20px; }
+  #error-screen p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+  #retry-btn {
+    margin-top: 8px;
+    padding: 12px 32px;
     background: var(--accent);
-    color: #fff; border: none;
-    padding: 12px 28px; border-radius: 12px;
-    font-size: .95rem; font-weight: 600;
-    cursor: pointer; margin-top: 8px;
+    color: #fff;
+    border: none; border-radius: 24px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
   }
 
-  /* ───────────── ANIMATIONS ───────────── */
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50% { opacity: .4; }
+  /* ── Empty state ── */
+  #empty-state {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; pointer-events: none;
   }
-  @keyframes fadeInDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to   { opacity: 1; transform: translateY(0); }
+  #empty-state .big-icon { font-size: 48px; opacity: .3; }
+  #empty-state p { color: var(--text2); font-size: 14px; }
+
+  @media (min-width: 600px) {
+    #video-grid { grid-template-columns: repeat(3, 1fr); }
+    #video-grid.count-1 { grid-template-columns: minmax(300px, 500px); justify-content: center; }
+    #video-grid.count-2 { grid-template-columns: repeat(2, minmax(220px, 380px)); justify-content: center; }
   }
-  @keyframes fadeOut {
-    to { opacity: 0; }
-  }
-  @keyframes tileIn {
-    from { opacity: 0; transform: scale(.9); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  .video-tile { animation: tileIn .3s ease; }
 </style>
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="loading-screen">
-  <div class="big-spinner"></div>
-  <h2>🎥 WebRTC Live</h2>
-  <p id="loading-msg">Đang yêu cầu quyền camera &amp; microphone...</p>
-  <button id="retry-btn" onclick="initMedia()">Thử lại</button>
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Đang kết nối camera...</p>
 </div>
 
-<!-- APP -->
-<div id="app" style="display:none">
-  <div id="header">
-    <div class="logo">
-      <div class="dot"></div>
-      WebRTC Live
+<!-- Error screen -->
+<div id="error-screen">
+  <div class="err-icon">📷</div>
+  <h2>Không thể truy cập camera</h2>
+  <p id="error-msg">Vui lòng cấp quyền camera và microphone, sau đó thử lại.</p>
+  <button id="retry-btn" onclick="init()">Thử lại</button>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+    </svg>
+    VideoCall
+  </div>
+  <div id="peer-count">
+    <span class="dot"></span>
+    <span id="count-label">1 người</span>
+  </div>
+</div>
+
+<!-- Grid -->
+<div id="grid-wrap">
+  <div id="video-grid" class="count-1">
+    <div id="empty-state">
+      <div class="big-icon">👥</div>
+      <p>Đang chờ người tham gia...</p>
     </div>
-    <div id="peer-count">👤 1</div>
-  </div>
-
-  <div id="grid-wrap">
-    <div id="video-grid" class="count-1"></div>
-  </div>
-
-  <div id="controls">
-    <button class="ctrl-btn active" id="btn-mic" onclick="toggleMic()">
-      <span class="icon">🎙️</span>
-      <span class="label">Mic</span>
-    </button>
-    <button class="ctrl-btn active" id="btn-cam" onclick="toggleCam()">
-      <span class="icon">📷</span>
-      <span class="label">Cam</span>
-    </button>
-    <button class="ctrl-btn" id="btn-swap" onclick="swapCamera()">
-      <span class="icon">🔄</span>
-      <span class="label">Flip</span>
-    </button>
-    <button class="ctrl-btn danger" id="btn-leave" onclick="leaveRoom()">
-      <span class="icon">📵</span>
-      <span class="label">Rời</span>
-    </button>
   </div>
 </div>
 
-<div id="toast-wrap"></div>
+<!-- Controls -->
+<div id="controls">
+  <button id="btn-mic" class="ctrl-btn on" onclick="toggleMic()" title="Microphone">
+    <svg id="mic-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+      <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  </button>
+
+  <button id="btn-cam" class="ctrl-btn on" onclick="toggleCam()" title="Camera">
+    <svg id="cam-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+    </svg>
+  </button>
+
+  <button id="btn-swap" class="ctrl-btn swap" onclick="swapCamera()" title="Đổi camera">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 4v6h6"/>
+      <path d="M23 20v-6h-6"/>
+      <path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/>
+    </svg>
+  </button>
+
+  <button class="ctrl-btn hangup" onclick="hangup()" title="Rời phòng">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7 2 2 0 011.72 2v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.42 19.42 0 013.43 9.65 19.86 19.86 0 01.36 1a2 2 0 012-2.18h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.34 6.72a16 16 0 003.97 6.59"/>
+      <line x1="23" y1="1" x2="1" y2="23"/>
+    </svg>
+  </button>
+</div>
+
+<div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-// ══════════════════════════════════════════
-//  CONFIG
-// ══════════════════════════════════════════
+// ── Config ──────────────────────────────────────────────
 const ICE_SERVERS = {
   iceServers: [
-    // Google STUN (miễn phí, ổn định)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    // Cloudflare STUN
     { urls: 'stun:stun.cloudflare.com:3478' },
-    // TURN miễn phí (dự phòng cho các mạng NAT nghiêm ngặt)
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
-      credential: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
       urls: 'turn:openrelay.metered.ca:443',
       username: 'openrelayproject',
-      credential: 'openrelayproject',
+      credential: 'openrelayproject'
     },
     {
       urls: 'turn:openrelay.metered.ca:443?transport=tcp',
       username: 'openrelayproject',
-      credential: 'openrelayproject',
+      credential: 'openrelayproject'
     },
-  ],
-  iceCandidatePoolSize: 10,
+  ]
 };
 
-// Constraints tối ưu cho thiết bị thấp
-const VIDEO_CONSTRAINTS_HIGH = {
-  width: { ideal: 640, max: 1280 },
-  height: { ideal: 480, max: 720 },
-  frameRate: { ideal: 24, max: 30 },
-  facingMode: 'user',
-};
-const VIDEO_CONSTRAINTS_LOW = {
-  width: { ideal: 320, max: 640 },
-  height: { ideal: 240, max: 480 },
-  frameRate: { ideal: 15, max: 24 },
-  facingMode: 'user',
-};
-
-// ══════════════════════════════════════════
-//  STATE
-// ══════════════════════════════════════════
-let localStream = null;
-let myId = null;
-let peers = {};            // peerId -> RTCPeerConnection
-let pendingCandidates = {}; // peerId -> [candidate]
-let mediaState = { video: true, audio: true };
-let currentFacingMode = 'user';
-let isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-let isLowEnd = false;
-
-// ══════════════════════════════════════════
-//  SOCKET
-// ══════════════════════════════════════════
-const socket = io({ transports: ['websocket', 'polling'] });
-
-socket.on('connect', () => {
-  myId = socket.id;
-  console.log('Socket connected:', myId);
-});
-
-socket.on('disconnect', () => {
-  showToast('⚠️ Mất kết nối server');
-});
-
-socket.on('reconnect', () => {
-  showToast('✅ Đã kết nối lại');
-  socket.emit('join');
-});
-
-// Có người mới vào → ta là "caller", gửi offer tới họ
-socket.on('user-joined', async (newUserId) => {
-  console.log('New user joined:', newUserId);
-  showToast(`👋 Có người tham gia`);
-  await createPeerConnection(newUserId, true); // true = ta gửi offer
-});
-
-// Server gửi danh sách user đang có → ta gửi offer tới từng người
-socket.on('existing-users', async (userIds) => {
-  console.log('Existing users:', userIds);
-  for (const uid of userIds) {
-    await createPeerConnection(uid, true);
-  }
-});
-
-// Nhận offer → tạo PC (nếu chưa có) và gửi answer
-socket.on('offer', async ({ from, offer }) => {
-  console.log('Received offer from:', from);
-  if (!peers[from]) {
-    await createPeerConnection(from, false);
-  }
-  const pc = peers[from];
-  try {
-    if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-pranswer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    } else {
-      // Glare: cả hai cùng offer → dùng ID so sánh để quyết định
-      if (myId > from) {
-        // Ta thắng: bỏ offer của họ, giữ của ta
-        return;
-      }
-      // Ta thua: rollback offer của ta, accept offer của họ
-      await pc.setLocalDescription({ type: 'rollback' });
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    }
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('answer', { to: from, answer: pc.localDescription });
-    // Flush pending ICE
-    flushCandidates(from);
-  } catch (e) {
-    console.error('Error handling offer:', e);
-    // Tạo lại kết nối
-    setTimeout(() => retryPeer(from), 2000);
-  }
-});
-
-// Nhận answer
-socket.on('answer', async ({ from, answer }) => {
-  console.log('Received answer from:', from);
-  const pc = peers[from];
-  if (!pc) return;
-  try {
-    if (pc.signalingState === 'have-local-offer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      flushCandidates(from);
-    }
-  } catch (e) {
-    console.error('Error handling answer:', e);
-    setTimeout(() => retryPeer(from), 2000);
-  }
-});
-
-// Nhận ICE candidate
-socket.on('ice-candidate', async ({ from, candidate }) => {
-  const pc = peers[from];
-  if (!pc) {
-    if (!pendingCandidates[from]) pendingCandidates[from] = [];
-    pendingCandidates[from].push(candidate);
-    return;
-  }
-  if (pc.remoteDescription && pc.remoteDescription.type) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (e) {
-      // Ignore benign ICE errors
-    }
-  } else {
-    if (!pendingCandidates[from]) pendingCandidates[from] = [];
-    pendingCandidates[from].push(candidate);
-  }
-});
-
-// User rời đi
-socket.on('user-left', (userId) => {
-  showToast('👋 Có người đã rời đi');
-  cleanupPeer(userId);
-});
-
-// Media state của peer thay đổi
-socket.on('peer-media-state', ({ from, video, audio }) => {
-  updatePeerMediaUI(from, video, audio);
-});
-
-// ══════════════════════════════════════════
-//  MEDIA
-// ══════════════════════════════════════════
-async function initMedia() {
-  const loadMsg = document.getElementById('loading-msg');
-  const retryBtn = document.getElementById('retry-btn');
-  retryBtn.style.display = 'none';
-  loadMsg.className = '';
-  loadMsg.textContent = 'Đang yêu cầu quyền camera & microphone...';
-
-  // Detect thiết bị thấp (RAM ≤ 4GB hoặc CPU lõi ≤ 4)
-  if (navigator.deviceMemory && navigator.deviceMemory <= 4) isLowEnd = true;
-  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) isLowEnd = true;
-
-  const constraints = {
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-    video: isMobile
-      ? (isLowEnd ? VIDEO_CONSTRAINTS_LOW : VIDEO_CONSTRAINTS_HIGH)
-      : VIDEO_CONSTRAINTS_HIGH,
+// Constraints: optimized for low-end Android/iOS
+function getVideoConstraints(facingMode = 'user') {
+  return {
+    facingMode,
+    width:  { ideal: 480, max: 640 },
+    height: { ideal: 640, max: 960 },
+    frameRate: { ideal: 24, max: 30 }
   };
+}
+
+// ── State ────────────────────────────────────────────────
+let localStream = null;
+let socket = null;
+const peers = new Map();   // peerId -> RTCPeerConnection
+const pendingCandidates = new Map(); // peerId -> ICECandidate[]
+let micEnabled = true;
+let camEnabled = true;
+let currentFacingMode = 'user';
+let makingOffer = new Set(); // prevent offer collision
+let polite = new Map();     // who is polite in perfect negotiation
+
+// ── Init ─────────────────────────────────────────────────
+async function init() {
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('error-screen').classList.remove('show');
 
   try {
-    localStream = await navigator.mediaDevices.getUserMedia(constraints);
-  } catch (err) {
-    console.warn('High quality failed, trying low:', err);
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: getVideoConstraints('user'),
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 44100,
+      }
+    });
+  } catch(err) {
+    // Try without video
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-      });
-      isLowEnd = true;
-    } catch (err2) {
-      console.error('Media error:', err2);
-      loadMsg.className = 'err';
-      loadMsg.textContent = '❌ Không thể truy cập camera/mic. Hãy cấp quyền và thử lại.';
-      retryBtn.style.display = 'block';
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      camEnabled = false;
+      updateCamBtn();
+      showToast('Camera không khả dụng, chỉ âm thanh');
+    } catch(e) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error-screen').classList.add('show');
+      document.getElementById('error-msg').textContent = e.message || 'Không thể truy cập thiết bị.';
       return;
     }
   }
 
-  loadMsg.textContent = 'Đang kết nối...';
-
-  // Hiển thị video local
-  addLocalTile();
-
-  // Ẩn loading
-  setTimeout(() => {
-    document.getElementById('loading-screen').style.opacity = '0';
-    setTimeout(() => {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('app').style.display = 'flex';
-    }, 400);
-  }, 500);
-
-  // Vào phòng
-  socket.emit('join');
+  renderLocalTile();
+  connectSocket();
+  document.getElementById('loading').classList.add('hidden');
 }
 
-// ══════════════════════════════════════════
-//  PEER CONNECTION
-// ══════════════════════════════════════════
-async function createPeerConnection(peerId, isInitiator) {
-  if (peers[peerId]) {
-    console.warn('PC already exists for', peerId);
-    return;
+// ── Local video tile ─────────────────────────────────────
+function renderLocalTile() {
+  const grid = document.getElementById('video-grid');
+  let tile = document.getElementById('local-tile');
+  if (!tile) {
+    tile = createTile('local-tile', 'Bạn', true);
+    grid.appendChild(tile);
+    updateEmptyState();
+  }
+  const video = tile.querySelector('video');
+  video.srcObject = localStream;
+  video.muted = true; // always mute self to prevent echo
+  const hasVideo = localStream && localStream.getVideoTracks().length > 0 && localStream.getVideoTracks()[0].enabled;
+  toggleAvatar(tile, !hasVideo);
+}
+
+function createTile(id, name, isLocal) {
+  const tile = document.createElement('div');
+  tile.className = 'video-tile' + (isLocal ? ' local' : '');
+  tile.id = id;
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = isLocal;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+
+  // Try to play on metadata loaded
+  video.addEventListener('loadedmetadata', () => {
+    video.play().catch(() => {});
+  });
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.innerHTML = `<div class="av-icon">👤</div><span>${isLocal ? 'Cam tắt' : 'Cam tắt'}</span>`;
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.innerHTML = `
+    <span class="name">${name}</span>
+    <span class="mic-status" id="mic-${id}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+      </svg>
+    </span>`;
+
+  tile.append(video, avatar, label);
+  return tile;
+}
+
+function toggleAvatar(tile, show) {
+  const av = tile.querySelector('.avatar');
+  if (av) av.classList.toggle('show', show);
+}
+
+function updateEmptyState() {
+  const grid = document.getElementById('video-grid');
+  const empty = document.getElementById('empty-state');
+  const tiles = grid.querySelectorAll('.video-tile');
+  if (empty) empty.style.display = tiles.length > 1 ? 'none' : 'flex';
+  updateGridClass(tiles.length);
+}
+
+function updateGridClass(count) {
+  const grid = document.getElementById('video-grid');
+  grid.className = 'count-' + Math.min(count, 6);
+  document.getElementById('count-label').textContent = count + ' người';
+}
+
+// ── Socket.IO ────────────────────────────────────────────
+function connectSocket() {
+  socket = io({ transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 10 });
+
+  socket.on('connect', () => {
+    console.log('Socket connected:', socket.id);
+    showToast('Đã kết nối máy chủ');
+  });
+
+  socket.on('disconnect', () => showToast('Mất kết nối, đang thử lại...'));
+
+  // Existing users when we join
+  socket.on('existing-users', (userIds) => {
+    console.log('Existing users:', userIds);
+    userIds.forEach((id, index) => {
+      // We are impolite (initiator) toward existing peers
+      polite.set(id, false);
+      // Stagger offers to reduce simultaneous load on low-end devices
+      setTimeout(() => createPeer(id, true), index * 300);
+    });
+  });
+
+  // A new user joined after us
+  socket.on('user-joined', (id) => {
+    console.log('User joined:', id);
+    // We are polite (non-initiator) toward newcomers
+    polite.set(id, true);
+    createPeer(id, false);
+    showToast('Có người vào phòng');
+  });
+
+  socket.on('user-left', (id) => {
+    console.log('User left:', id);
+    removePeer(id);
+    showToast('Có người rời phòng');
+  });
+
+  // Signaling
+  socket.on('offer', async ({ from, offer }) => {
+    await handleOffer(from, offer);
+  });
+
+  socket.on('answer', async ({ from, answer }) => {
+    await handleAnswer(from, answer);
+  });
+
+  socket.on('ice-candidate', async ({ from, candidate }) => {
+    await handleIceCandidate(from, candidate);
+  });
+
+  // Media state from remote
+  socket.on('peer-media-state', ({ from, video, audio }) => {
+    updateRemoteMediaState(from, video, audio);
+  });
+}
+
+// ── Peer Connection ──────────────────────────────────────
+function createPeer(peerId, shouldOffer) {
+  if (peers.has(peerId)) {
+    console.warn('Peer already exists:', peerId);
+    return peers.get(peerId);
   }
 
-  const pc = new RTCPeerConnection(ICE_SERVERS);
-  peers[peerId] = pc;
-  pendingCandidates[peerId] = pendingCandidates[peerId] || [];
+  console.log('Creating peer:', peerId, shouldOffer ? '(initiator)' : '(receiver)');
 
-  // Thêm local tracks
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+  peers.set(peerId, pc);
+  pendingCandidates.set(peerId, []);
+
+  // Add local tracks
   if (localStream) {
     localStream.getTracks().forEach(track => {
       pc.addTrack(track, localStream);
     });
   }
 
-  // ICE candidate
+  // ICE candidates
   pc.onicecandidate = ({ candidate }) => {
     if (candidate) {
       socket.emit('ice-candidate', { to: peerId, candidate });
     }
   };
 
-  // ICE state
   pc.oniceconnectionstatechange = () => {
-    console.log(`ICE [${peerId}]: ${pc.iceConnectionState}`);
-    if (pc.iceConnectionState === 'failed') {
-      console.warn('ICE failed, restarting...');
+    const state = pc.iceConnectionState;
+    console.log(`ICE [${peerId.slice(0,6)}]: ${state}`);
+    if (state === 'failed') {
       pc.restartIce();
     }
-    if (pc.iceConnectionState === 'disconnected') {
-      // Chờ 5s rồi cleanup nếu vẫn disconnect
+    if (state === 'disconnected') {
+      // Wait before cleanup
       setTimeout(() => {
         if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-          retryPeer(peerId);
+          removePeer(peerId);
         }
       }, 5000);
     }
   };
 
-  // Connection state
   pc.onconnectionstatechange = () => {
-    console.log(`Conn [${peerId}]: ${pc.connectionState}`);
-    const tile = document.getElementById('tile-' + peerId);
-    if (!tile) return;
-    const overlay = tile.querySelector('.connecting-overlay');
-    if (pc.connectionState === 'connected') {
-      if (overlay) overlay.remove();
-    } else if (pc.connectionState === 'failed') {
-      retryPeer(peerId);
+    console.log(`Connection [${peerId.slice(0,6)}]: ${pc.connectionState}`);
+    if (pc.connectionState === 'failed') {
+      // Attempt ICE restart
+      if (shouldOffer) {
+        makeOffer(peerId, true);
+      }
     }
   };
 
-  // Nhận track từ peer
-  pc.ontrack = ({ streams }) => {
-    console.log('Got track from:', peerId);
-    if (streams && streams[0]) {
-      addRemoteTile(peerId, streams[0]);
+  // Receive remote tracks
+  pc.ontrack = ({ streams, track }) => {
+    const stream = streams[0];
+    if (!stream) return;
+    const tileId = 'peer-' + peerId;
+    let tile = document.getElementById(tileId);
+    if (!tile) {
+      const shortId = peerId.slice(0, 6);
+      tile = createTile(tileId, 'Người dùng ' + shortId, false);
+      document.getElementById('video-grid').appendChild(tile);
+      updateEmptyState();
     }
+    const video = tile.querySelector('video');
+    if (!video.srcObject || video.srcObject.id !== stream.id) {
+      video.srcObject = stream;
+    }
+    track.onunmute = () => {
+      if (track.kind === 'video') toggleAvatar(tile, false);
+      video.play().catch(() => {});
+    };
+    track.onmute = () => {
+      if (track.kind === 'video') toggleAvatar(tile, true);
+    };
   };
 
-  // Negotiation needed
+  // Negotiation needed (Perfect Negotiation)
   pc.onnegotiationneeded = async () => {
-    if (!isInitiator) return;
-    try {
-      if (pc.signalingState !== 'stable') return;
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await pc.setLocalDescription(offer);
-      socket.emit('offer', { to: peerId, offer: pc.localDescription });
-    } catch (e) {
-      console.error('Negotiation error:', e);
+    if (shouldOffer) {
+      await makeOffer(peerId, false);
     }
   };
-
-  // Nếu là initiator, tạo offer ngay
-  if (isInitiator) {
-    addRemoteTileConnecting(peerId);
-    try {
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await pc.setLocalDescription(offer);
-      socket.emit('offer', { to: peerId, offer: pc.localDescription });
-    } catch (e) {
-      console.error('Create offer error:', e);
-    }
-  }
 
   return pc;
 }
 
-function flushCandidates(peerId) {
-  const pc = peers[peerId];
-  if (!pc || !pendingCandidates[peerId]) return;
-  const list = [...pendingCandidates[peerId]];
-  pendingCandidates[peerId] = [];
-  list.forEach(async (c) => {
-    try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
-    catch (e) { /* ignore */ }
-  });
+async function makeOffer(peerId, isRestart) {
+  const pc = peers.get(peerId);
+  if (!pc) return;
+  if (makingOffer.has(peerId)) return;
+  makingOffer.add(peerId);
+  try {
+    const offerOptions = isRestart ? { iceRestart: true } : {};
+    const offer = await pc.createOffer(offerOptions);
+    if (pc.signalingState !== 'stable') return;
+    await pc.setLocalDescription(offer);
+    socket.emit('offer', { to: peerId, offer: pc.localDescription });
+  } catch(e) {
+    console.error('makeOffer error:', e);
+  } finally {
+    makingOffer.delete(peerId);
+  }
 }
 
-async function retryPeer(peerId) {
-  console.log('Retrying peer:', peerId);
-  if (peers[peerId]) {
-    peers[peerId].close();
-    delete peers[peerId];
+async function handleOffer(from, offer) {
+  if (!peers.has(from)) {
+    createPeer(from, false);
   }
-  const tile = document.getElementById('tile-' + peerId);
+  const pc = peers.get(from);
+  if (!pc) return;
+
+  const isPolite = polite.get(from) ?? true;
+  const offerCollision = pc.signalingState !== 'stable' || makingOffer.has(from);
+
+  if (!isPolite && offerCollision) {
+    console.log('Ignoring colliding offer (impolite)');
+    return;
+  }
+
+  try {
+    if (offerCollision) {
+      await Promise.all([
+        pc.setLocalDescription({ type: 'rollback' }),
+        pc.setRemoteDescription(offer)
+      ]);
+    } else {
+      await pc.setRemoteDescription(offer);
+    }
+    // Flush pending candidates
+    await flushCandidates(from);
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('answer', { to: from, answer: pc.localDescription });
+  } catch(e) {
+    console.error('handleOffer error:', e);
+  }
+}
+
+async function handleAnswer(from, answer) {
+  const pc = peers.get(from);
+  if (!pc) return;
+  if (pc.signalingState !== 'have-local-offer') return;
+  try {
+    await pc.setRemoteDescription(answer);
+    await flushCandidates(from);
+  } catch(e) {
+    console.error('handleAnswer error:', e);
+  }
+}
+
+async function handleIceCandidate(from, candidate) {
+  const pc = peers.get(from);
+  if (!pc) return;
+  // Buffer candidates if remote description not set yet
+  if (!pc.remoteDescription || !pc.remoteDescription.type) {
+    if (!pendingCandidates.has(from)) pendingCandidates.set(from, []);
+    pendingCandidates.get(from).push(candidate);
+    return;
+  }
+  try {
+    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+  } catch(e) {
+    if (!e.message.includes('closed')) console.error('ICE candidate error:', e);
+  }
+}
+
+async function flushCandidates(peerId) {
+  const candidates = pendingCandidates.get(peerId) || [];
+  const pc = peers.get(peerId);
+  if (!pc || !pc.remoteDescription) return;
+  for (const c of candidates) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+  }
+  pendingCandidates.set(peerId, []);
+}
+
+function removePeer(peerId) {
+  const pc = peers.get(peerId);
+  if (pc) {
+    pc.ontrack = null;
+    pc.onicecandidate = null;
+    pc.oniceconnectionstatechange = null;
+    pc.onconnectionstatechange = null;
+    pc.onnegotiationneeded = null;
+    pc.close();
+    peers.delete(peerId);
+  }
+  pendingCandidates.delete(peerId);
+  makingOffer.delete(peerId);
+  polite.delete(peerId);
+
+  const tile = document.getElementById('peer-' + peerId);
   if (tile) tile.remove();
-  updateGrid();
+  updateEmptyState();
 }
 
-function cleanupPeer(peerId) {
-  if (peers[peerId]) {
-    peers[peerId].close();
-    delete peers[peerId];
-  }
-  delete pendingCandidates[peerId];
-  const tile = document.getElementById('tile-' + peerId);
-  if (tile) tile.remove();
-  updateGrid();
-}
-
-// ══════════════════════════════════════════
-//  VIDEO TILES
-// ══════════════════════════════════════════
-function addLocalTile() {
-  const grid = document.getElementById('video-grid');
-  const tile = document.createElement('div');
-  tile.className = 'video-tile local';
-  tile.id = 'tile-local';
-  tile.innerHTML = `
-    <video id="vid-local" autoplay muted playsinline webkit-playsinline></video>
-    <div class="avatar-overlay">
-      <div class="avatar-circle">🙂</div>
-      <div class="avatar-name">Bạn (cam tắt)</div>
-    </div>
-    <div class="tile-info">
-      <span class="mic-icon" id="mic-local">🎙️</span>
-      <span>Bạn</span>
-    </div>
-  `;
-  grid.appendChild(tile);
-  updateGrid();
-
-  const vid = document.getElementById('vid-local');
-  vid.srcObject = localStream;
-  vid.play().catch(() => {});
-}
-
-function addRemoteTileConnecting(peerId) {
-  if (document.getElementById('tile-' + peerId)) return;
-  const grid = document.getElementById('video-grid');
-  const tile = document.createElement('div');
-  tile.className = 'video-tile';
-  tile.id = 'tile-' + peerId;
-  const short = peerId.slice(-4).toUpperCase();
-  tile.innerHTML = `
-    <video autoplay playsinline webkit-playsinline></video>
-    <div class="avatar-overlay">
-      <div class="avatar-circle">${short[0]}</div>
-      <div class="avatar-name">${short}</div>
-    </div>
-    <div class="connecting-overlay">
-      <div class="spinner"></div>
-      <span>Đang kết nối...</span>
-    </div>
-    <div class="tile-info">
-      <span class="mic-icon" id="mic-${peerId}">🎙️</span>
-      <span>${short}</span>
-    </div>
-  `;
-  grid.appendChild(tile);
-  updateGrid();
-}
-
-function addRemoteTile(peerId, stream) {
-  let tile = document.getElementById('tile-' + peerId);
-  if (!tile) {
-    addRemoteTileConnecting(peerId);
-    tile = document.getElementById('tile-' + peerId);
-  }
-  // Xóa connecting overlay
-  const overlay = tile.querySelector('.connecting-overlay');
-  if (overlay) overlay.remove();
-
-  const vid = tile.querySelector('video');
-  if (vid) {
-    vid.srcObject = stream;
-    // iOS cần phải play() sau khi gán srcObject
-    vid.play().catch(e => {
-      console.warn('Autoplay blocked:', e);
-      // Tạo nút play cho iOS
-      tile.addEventListener('click', () => vid.play(), { once: true });
-    });
-  }
-  updateGrid();
-}
-
-function updateGrid() {
-  const grid = document.getElementById('video-grid');
-  const count = grid.querySelectorAll('.video-tile').length;
-  // Xóa class count cũ
-  grid.className = `count-${Math.min(count, 9)}`;
-  // Update peer count
-  document.getElementById('peer-count').textContent = `👤 ${count}`;
-}
-
-function updatePeerMediaUI(peerId, video, audio) {
-  const tile = document.getElementById('tile-' + peerId);
-  if (!tile) return;
-  if (video) tile.classList.remove('cam-off');
-  else tile.classList.add('cam-off');
-  const micEl = document.getElementById('mic-' + peerId);
-  if (micEl) {
-    micEl.textContent = audio ? '🎙️' : '🔇';
-    if (audio) micEl.classList.remove('muted');
-    else micEl.classList.add('muted');
-  }
-}
-
-// ══════════════════════════════════════════
-//  CONTROLS
-// ══════════════════════════════════════════
+// ── Media controls ───────────────────────────────────────
 function toggleMic() {
-  mediaState.audio = !mediaState.audio;
-  localStream.getAudioTracks().forEach(t => t.enabled = mediaState.audio);
-  const btn = document.getElementById('btn-mic');
-  const micLocal = document.getElementById('mic-local');
-  if (mediaState.audio) {
-    btn.className = 'ctrl-btn active';
-    btn.querySelector('.icon').textContent = '🎙️';
-    btn.querySelector('.label').textContent = 'Mic';
-    if (micLocal) { micLocal.textContent = '🎙️'; micLocal.classList.remove('muted'); }
-  } else {
-    btn.className = 'ctrl-btn';
-    btn.querySelector('.icon').textContent = '🔇';
-    btn.querySelector('.label').textContent = 'Tắt mic';
-    if (micLocal) { micLocal.textContent = '🔇'; micLocal.classList.add('muted'); }
-  }
-  socket.emit('media-state', mediaState);
-  showToast(mediaState.audio ? '🎙️ Microphone bật' : '🔇 Microphone tắt');
+  if (!localStream) return;
+  const tracks = localStream.getAudioTracks();
+  micEnabled = !micEnabled;
+  tracks.forEach(t => t.enabled = micEnabled);
+  socket.emit('media-state', { video: camEnabled, audio: micEnabled });
+  updateMicBtn();
+  showToast(micEnabled ? 'Microphone bật' : 'Microphone tắt');
 }
 
 function toggleCam() {
-  mediaState.video = !mediaState.video;
-  localStream.getVideoTracks().forEach(t => t.enabled = mediaState.video);
-  const btn = document.getElementById('btn-cam');
-  const tile = document.getElementById('tile-local');
-  if (mediaState.video) {
-    btn.className = 'ctrl-btn active';
-    btn.querySelector('.icon').textContent = '📷';
-    btn.querySelector('.label').textContent = 'Cam';
-    if (tile) tile.classList.remove('cam-off');
-  } else {
-    btn.className = 'ctrl-btn';
-    btn.querySelector('.icon').textContent = '🚫';
-    btn.querySelector('.label').textContent = 'Tắt cam';
-    if (tile) tile.classList.add('cam-off');
-  }
-  socket.emit('media-state', mediaState);
-  showToast(mediaState.video ? '📷 Camera bật' : '🚫 Camera tắt');
+  if (!localStream) return;
+  const tracks = localStream.getVideoTracks();
+  if (tracks.length === 0) { showToast('Không có camera'); return; }
+  camEnabled = !camEnabled;
+  tracks.forEach(t => t.enabled = camEnabled);
+  socket.emit('media-state', { video: camEnabled, audio: micEnabled });
+  updateCamBtn();
+  const tile = document.getElementById('local-tile');
+  if (tile) toggleAvatar(tile, !camEnabled);
+  showToast(camEnabled ? 'Camera bật' : 'Camera tắt');
 }
 
 async function swapCamera() {
-  if (!isMobile) {
-    showToast('⚠️ Flip camera chỉ dành cho mobile');
-    return;
-  }
+  if (!localStream) return;
+  const videoTracks = localStream.getVideoTracks();
+  if (videoTracks.length === 0) { showToast('Không có camera'); return; }
+
   currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+  showToast(currentFacingMode === 'user' ? 'Camera trước' : 'Camera sau');
+
   try {
-    // Dừng track cũ
-    localStream.getVideoTracks().forEach(t => t.stop());
-
+    // Get new stream with opposite camera
     const newStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: currentFacingMode,
-        width: { ideal: isLowEnd ? 320 : 640 },
-        height: { ideal: isLowEnd ? 240 : 480 },
-        frameRate: { ideal: isLowEnd ? 15 : 24 },
-      },
+      video: getVideoConstraints(currentFacingMode),
+      audio: false
     });
+    const newVideoTrack = newStream.getVideoTracks()[0];
 
-    const newTrack = newStream.getVideoTracks()[0];
-
-    // Thay track trong localStream
-    const oldTrack = localStream.getVideoTracks()[0];
-    if (oldTrack) localStream.removeTrack(oldTrack);
-    localStream.addTrack(newTrack);
-
-    // Cập nhật video local
-    const vid = document.getElementById('vid-local');
-    if (vid) {
-      vid.srcObject = null;
-      vid.srcObject = localStream;
-      vid.play().catch(() => {});
-    }
-
-    // Thay track trong tất cả RTCPeerConnection
-    Object.values(peers).forEach(pc => {
+    // Replace track in all peer connections
+    for (const [peerId, pc] of peers) {
       const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-      if (sender) sender.replaceTrack(newTrack);
-    });
-
-    // Mirror flip
-    const tile = document.getElementById('tile-local');
-    if (tile) {
-      const v = tile.querySelector('video');
-      if (currentFacingMode === 'user') {
-        v.style.transform = 'scaleX(-1)';
-        v.style.webkitTransform = 'scaleX(-1)';
-      } else {
-        v.style.transform = 'none';
-        v.style.webkitTransform = 'none';
+      if (sender) {
+        await sender.replaceTrack(newVideoTrack).catch(console.error);
       }
     }
 
-    showToast(currentFacingMode === 'user' ? '🤳 Camera trước' : '📸 Camera sau');
-  } catch (e) {
+    // Stop old video track
+    videoTracks.forEach(t => { t.stop(); localStream.removeTrack(t); });
+    localStream.addTrack(newVideoTrack);
+    newVideoTrack.enabled = camEnabled;
+
+    // Update local preview
+    const localVideo = document.querySelector('#local-tile video');
+    if (localVideo) {
+      localVideo.srcObject = null;
+      localVideo.srcObject = localStream;
+    }
+    // Mirror: front cam mirrors, back cam doesn't
+    if (localVideo) {
+      localVideo.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+    }
+  } catch(e) {
     console.error('Swap camera error:', e);
-    showToast('❌ Không thể đổi camera');
-    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user'; // rollback
+    currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    showToast('Không thể đổi camera');
   }
 }
 
-function leaveRoom() {
-  socket.disconnect();
-  Object.keys(peers).forEach(id => cleanupPeer(id));
-  localStream?.getTracks().forEach(t => t.stop());
-  showToast('👋 Đã rời phòng');
-  // Reload sau 1s
-  setTimeout(() => location.reload(), 1000);
+function hangup() {
+  peers.forEach((pc, id) => removePeer(id));
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  if (socket) socket.disconnect();
+  showToast('Đã rời phòng');
+  setTimeout(() => location.reload(), 1500);
 }
 
-// ══════════════════════════════════════════
-//  UTILS
-// ══════════════════════════════════════════
+// ── UI updates ───────────────────────────────────────────
+function updateMicBtn() {
+  const btn = document.getElementById('btn-mic');
+  btn.className = 'ctrl-btn ' + (micEnabled ? 'on' : 'off');
+  btn.querySelector('svg').innerHTML = micEnabled
+    ? `<path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>`
+    : `<line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" stroke="#ef4444"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23" stroke="#ef4444"/><line x1="12" y1="19" x2="12" y2="23" stroke="#ef4444"/><line x1="8" y1="23" x2="16" y2="23" stroke="#ef4444"/>`;
+}
+
+function updateCamBtn() {
+  const btn = document.getElementById('btn-cam');
+  btn.className = 'ctrl-btn ' + (camEnabled ? 'on' : 'off');
+  btn.querySelector('svg').innerHTML = camEnabled
+    ? `<path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>`
+    : `<path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14" stroke="#ef4444"/><rect x="1" y="5" width="14" height="14" rx="2" ry="2" stroke="#ef4444"/><line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444"/>`;
+}
+
+function updateRemoteMediaState(peerId, video, audio) {
+  const tileId = 'peer-' + peerId;
+  const tile = document.getElementById(tileId);
+  if (!tile) return;
+  toggleAvatar(tile, !video);
+  const micEl = document.getElementById('mic-' + tileId);
+  if (micEl) micEl.classList.toggle('muted', !audio);
+}
+
+// ── Toast ────────────────────────────────────────────────
+let toastTimer = null;
 function showToast(msg) {
-  const wrap = document.getElementById('toast-wrap');
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.textContent = msg;
-  wrap.appendChild(el);
-  setTimeout(() => el.remove(), 3200);
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// Ngăn page scroll khi swipe trong video
-document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+// ── Start ────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', init);
 
-// iOS: play video sau tương tác
-document.addEventListener('touchstart', () => {
-  document.querySelectorAll('video').forEach(v => {
-    if (v.paused) v.play().catch(() => {});
-  });
-}, { once: true });
-
-// ══════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════
-window.addEventListener('load', initMedia);
+// Handle page visibility (mobile background)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && localStream) {
+    localStream.getVideoTracks().forEach(t => {
+      if (t.readyState === 'ended' && camEnabled) {
+        // Reinitialise if track ended in background
+        init();
+      }
+    });
+  }
+});
 </script>
 </body>
 </html>
