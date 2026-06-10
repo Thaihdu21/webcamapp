@@ -1,832 +1,642 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <title>WebRTC Room</title>
-  <style>
-    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>RTC Đa Người Dùng</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:#0f0f1a; --surface:#1a1a2e; --border:#2a2a4a;
-      --purple:#a78bfa; --green:#6ee7b7; --red:#fca5a5; --gray:#6b7280;
-    }
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --border: #2e2e40;
+    --accent: #4f8ef7;
+    --red: #e05252;
+    --green: #4caf7d;
+    --text: #e8e8f0;
+    --subtext: #888;
+  }
 
-    html { height:100%; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+  }
 
-    body {
-      background:var(--bg);
-      color:#fff;
-      font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      /* iOS 12 compat: dùng JS set height thay vì dvh */
-      height:100%;
-      display:-webkit-flex;
-      display:flex;
-      -webkit-flex-direction:column;
-      flex-direction:column;
-      overflow:hidden;
-      overscroll-behavior:none;
-      -webkit-tap-highlight-color:transparent;
-      touch-action:manipulation;
-    }
+  /* ── HEADER ── */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    z-index: 100;
+  }
+  #header h1 { font-size: 15px; font-weight: 600; letter-spacing: .3px; }
+  #user-count {
+    font-size: 12px;
+    background: var(--accent);
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
 
-    header {
-      background:var(--surface);
-      padding:10px 16px;
-      padding-top:calc(10px + env(safe-area-inset-top, 0px));
-      display:-webkit-flex; display:flex;
-      -webkit-align-items:center; align-items:center;
-      -webkit-justify-content:space-between; justify-content:space-between;
-      border-bottom:1px solid var(--border);
-      -webkit-flex-shrink:0; flex-shrink:0;
-      z-index:10;
-    }
+  /* ── VIDEO GRID ── */
+  #video-grid {
+    position: fixed;
+    top: 52px;
+    bottom: 80px;
+    left: 0; right: 0;
+    display: grid;
+    gap: 4px;
+    padding: 6px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transition: grid-template-columns 0.3s;
+  }
 
-    header h1 { font-size:1rem; color:var(--purple); letter-spacing:1px; }
+  /* Grid layout động theo số người */
+  #video-grid.n1 { grid-template-columns: 1fr; }
+  #video-grid.n2 { grid-template-columns: 1fr 1fr; }
+  #video-grid.n3 { grid-template-columns: 1fr 1fr; }
+  #video-grid.n4 { grid-template-columns: 1fr 1fr; }
+  #video-grid.n5,
+  #video-grid.n6 { grid-template-columns: 1fr 1fr; }
+  #video-grid.n7,
+  #video-grid.n8,
+  #video-grid.n9 { grid-template-columns: 1fr 1fr 1fr; }
 
-    #status {
-      font-size:0.75rem; color:var(--green);
-      background:#064e3b22; border:1px solid #6ee7b744;
-      padding:3px 10px; border-radius:99px;
-    }
-    #status.error { color:var(--red); border-color:#fca5a544; }
+  /* ── VIDEO CARD ── */
+  .video-card {
+    position: relative;
+    background: var(--surface);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    aspect-ratio: 4/3;
+  }
 
-    #video-grid {
-      -webkit-flex:1; flex:1;
-      overflow-y:auto;
-      -webkit-overflow-scrolling:touch;
-      display:-webkit-flex; display:flex;
-      -webkit-flex-wrap:wrap; flex-wrap:wrap;
-      gap:6px;
-      padding:8px;
-      -webkit-align-content:flex-start; align-content:flex-start;
-    }
+  .video-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+    /* Quan trọng cho iOS */
+    -webkit-playsinline: true;
+    transform: translateZ(0);
+  }
 
-    /* Dùng flex thay grid cho iOS 12 compat */
-    .video-wrapper {
-      position:relative;
-      background:var(--surface);
-      border-radius:10px;
-      overflow:hidden;
-      border:1.5px solid var(--border);
-      /* width tính bằng JS hoặc calc */
-      -webkit-flex-shrink:0; flex-shrink:0;
-    }
+  .video-card .label {
+    position: absolute;
+    bottom: 6px; left: 8px;
+    font-size: 11px;
+    background: rgba(0,0,0,0.55);
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: #fff;
+    font-weight: 500;
+    pointer-events: none;
+  }
 
-    .video-wrapper video {
-      width:100%; height:100%;
-      display:block;
-      object-fit:cover;
-      background:#000;
-      /* iOS hardware accel */
-      -webkit-transform:translateZ(0);
-      transform:translateZ(0);
-    }
+  /* Cam tắt overlay */
+  .cam-off-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: #111;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--subtext);
+    font-size: 13px;
+  }
+  .cam-off-overlay .avatar {
+    width: 52px; height: 52px;
+    background: var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .video-card.cam-off .cam-off-overlay { display: flex; }
+  .video-card.cam-off video { opacity: 0; }
 
-    /* Mirror front cam */
-    .video-wrapper.local video {
-      -webkit-transform:scaleX(-1) translateZ(0);
-      transform:scaleX(-1) translateZ(0);
-    }
+  /* ── CONTROLS ── */
+  #controls {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 80px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    z-index: 100;
+    /* iOS safe area */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 
-    .label {
-      position:absolute; bottom:6px; left:8px;
-      font-size:0.68rem; background:#0009;
-      padding:2px 8px; border-radius:6px;
-      pointer-events:none;
-      max-width:70%; overflow:hidden;
-      text-overflow:ellipsis; white-space:nowrap;
-    }
+  .btn-ctrl {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    transition: background 0.2s, transform 0.1s;
+    background: var(--border);
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+  }
+  .btn-ctrl:active { transform: scale(0.9); }
+  .btn-ctrl.off { background: var(--red); color: #fff; }
+  .btn-ctrl.swap { background: #2e2e50; font-size: 20px; }
+  .btn-ctrl.swap:active { background: var(--accent); }
 
-    .cam-off-overlay {
-      position:absolute; top:0; left:0; right:0; bottom:0;
-      display:none;
-      -webkit-align-items:center; align-items:center;
-      -webkit-justify-content:center; justify-content:center;
-      background:var(--surface);
-      -webkit-flex-direction:column; flex-direction:column;
-      gap:6px; color:var(--gray); font-size:0.78rem;
-    }
-    .cam-off-overlay svg { width:36px; height:36px; opacity:.3; }
-    .video-wrapper.cam-off .cam-off-overlay { display:-webkit-flex; display:flex; }
+  /* Status toast */
+  #toast {
+    position: fixed;
+    top: 62px; left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: rgba(30,30,50,0.92);
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 18px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 200;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 
-    /* ── Controls ── */
-    #controls {
-      background:var(--surface);
-      border-top:1px solid var(--border);
-      padding:10px 12px;
-      padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
-      display:-webkit-flex; display:flex;
-      -webkit-justify-content:center; justify-content:center;
-      -webkit-align-items:center; align-items:center;
-      gap:8px;
-      -webkit-flex-shrink:0; flex-shrink:0;
-      -webkit-flex-wrap:wrap; flex-wrap:wrap;
-    }
+  /* Connecting indicator */
+  .connecting-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #f0a500;
+    margin-right: 6px;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
 
-    .btn {
-      display:-webkit-inline-flex; display:inline-flex;
-      -webkit-align-items:center; align-items:center;
-      -webkit-justify-content:center; justify-content:center;
-      gap:5px;
-      padding:10px 14px;
-      border-radius:99px; border:none;
-      cursor:pointer;
-      font-size:0.8rem; font-weight:600;
-      min-height:44px; min-width:52px;
-      -webkit-appearance:none; appearance:none;
-      touch-action:manipulation;
-      -webkit-user-select:none; user-select:none;
-      transition:opacity .15s;
-    }
-    .btn:active { opacity:.7; }
-    .btn svg { width:17px; height:17px; -webkit-flex-shrink:0; flex-shrink:0; }
-
-    .btn-cam { background:#312e81; color:#c4b5fd; border:1px solid #4c1d95; }
-    .btn-cam.off { background:#1f2937; color:var(--gray); border-color:#374151; }
-
-    .btn-mic { background:#064e3b; color:var(--green); border:1px solid #065f46; }
-    .btn-mic.off { background:#1f2937; color:var(--gray); border-color:#374151; }
-
-    .btn-swap { background:#1e3a5f; color:#93c5fd; border:1px solid #1d4ed8; }
-    .btn-swap:disabled { opacity:.4; }
-
-    @keyframes spin { to { -webkit-transform:rotate(360deg); transform:rotate(360deg); } }
-    .btn-swap.swapping svg {
-      -webkit-animation:spin .6s linear;
-      animation:spin .6s linear;
-    }
-
-    /* Ẩn swap trên desktop */
-    @media (hover:hover) and (pointer:fine) {
-      .btn-swap { display:none; }
-    }
-
-    #peer-count {
-      font-size:0.78rem; color:#94a3b8;
-      min-width:52px; text-align:center;
-    }
-
-    /* Thông báo lỗi */
-    #error-box {
-      display:none;
-      position:fixed; bottom:80px; left:50%;
-      -webkit-transform:translateX(-50%); transform:translateX(-50%);
-      background:#7f1d1d; color:#fca5a5;
-      border:1px solid #fca5a544;
-      padding:8px 16px; border-radius:8px;
-      font-size:0.8rem; text-align:center;
-      z-index:100; max-width:90%;
-    }
-  </style>
+  /* Mobile landscape */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #video-grid { bottom: 60px; }
+    #controls { height: 60px; }
+    .btn-ctrl { width: 44px; height: 44px; font-size: 18px; }
+  }
+</style>
 </head>
 <body>
 
-<header>
-  <h1>🎥 WebRTC Room</h1>
-  <span id="status">Đang kết nối...</span>
-</header>
-
-<div id="video-grid"></div>
-
-<div id="controls">
-  <button class="btn btn-cam" id="btn-cam" onclick="toggleCam()">
-    <svg id="icon-cam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-    </svg>
-    Cam
-  </button>
-
-  <button class="btn btn-mic" id="btn-mic" onclick="toggleMic()">
-    <svg id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/>
-      <path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>
-    </svg>
-    Mic
-  </button>
-
-  <button class="btn btn-swap" id="btn-swap" onclick="swapCam()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-    </svg>
-    Đổi cam
-  </button>
-
-  <span id="peer-count">👥 1</span>
+<div id="header">
+  <h1>📡 RTC Live</h1>
+  <span id="user-count">1 người</span>
 </div>
 
-<div id="error-box"></div>
+<div id="video-grid" class="n1"></div>
+
+<div id="controls">
+  <button class="btn-ctrl" id="btn-mic"  title="Mic">🎙️</button>
+  <button class="btn-ctrl" id="btn-cam"  title="Cam">📹</button>
+  <button class="btn-ctrl swap" id="btn-swap" title="Đổi camera">🔄</button>
+</div>
+
+<div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-// ═══════════════════════════════════════════════════
-// POLYFILL & COMPAT CHECK
-// ═══════════════════════════════════════════════════
-
-// iOS 12 không có optional chaining → dùng helper
-function safeGet(obj, key) {
-  return obj && obj[key];
-}
-
-// Fix body height cho iOS (thay vì dvh)
-function fixBodyHeight() {
-  document.body.style.height = window.innerHeight + 'px';
-}
-fixBodyHeight();
-window.addEventListener('resize', fixBodyHeight);
-window.addEventListener('orientationchange', function() {
-  setTimeout(fixBodyHeight, 300);
-});
-
-// ═══════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════
-var ICE_SERVERS = {
+// ─────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────
+const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' }
+    // Free TURN — tăng khả năng kết nối qua NAT/mobile
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ]
 };
 
-// ═══════════════════════════════════════════════════
-// STATE — dùng object thay Map (iOS 12 Map có bugs)
-// ═══════════════════════════════════════════════════
-var peers   = {};   // peerId -> RTCPeerConnection
-var iceBuf  = {};   // peerId -> [candidate]
-var localStream  = null;
-var camOn   = true;
-var micOn   = true;
-var facingMode   = 'user';
-var isSwapping   = false;
-var myId    = null;
-var hasTwoCamera = false;
+// Giảm chất lượng cho thiết bị yếu
+const CONSTRAINTS = {
+  video: {
+    width: { ideal: 640, max: 1280 },
+    height: { ideal: 480, max: 720 },
+    frameRate: { ideal: 20, max: 30 },
+    facingMode: 'user'
+  },
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    sampleRate: 16000
+  }
+};
 
-var grid       = document.getElementById('video-grid');
-var statusEl   = document.getElementById('status');
-var peerCount  = document.getElementById('peer-count');
-var errorBox   = document.getElementById('error-box');
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+const socket = io({ transports: ['websocket', 'polling'] });
+const peers = new Map();          // peerId -> { pc, stream }
+const pendingCandidates = new Map(); // peerId -> [candidates]
+let localStream = null;
+let micOn = true;
+let camOn = true;
+let facingMode = 'user';
+let makingOffer = false;
 
-// ═══════════════════════════════════════════════════
-// DETECT số camera (để hiện/ẩn nút swap)
-// ═══════════════════════════════════════════════════
-function detectCameras() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-  navigator.mediaDevices.enumerateDevices().then(function(devices) {
-    var cams = devices.filter(function(d) { return d.kind === 'videoinput'; });
-    hasTwoCamera = cams.length >= 2;
-    var swapBtn = document.getElementById('btn-swap');
-    if (swapBtn) {
-      swapBtn.style.display = hasTwoCamera ? '' : 'none';
-    }
-  }).catch(function() {});
+// ─────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), duration);
 }
 
-// ═══════════════════════════════════════════════════
-// LAYOUT: tính size video wrapper
-// ═══════════════════════════════════════════════════
-function layoutVideos() {
-  var wrappers = grid.querySelectorAll('.video-wrapper');
-  var n = wrappers.length;
-  if (n === 0) return;
+function updateGrid() {
+  const grid = document.getElementById('video-grid');
+  const total = grid.children.length;
+  grid.className = `n${Math.min(total, 9)}`;
+  document.getElementById('user-count').textContent = `${total} người`;
+}
 
-  var W = grid.clientWidth - 8 * 2;   // padding 8px mỗi bên
-  var gap = 6;
-  var cols, rows;
+function createVideoCard(id, stream, label = '') {
+  const card = document.createElement('div');
+  card.className = 'video-card';
+  card.id = `card-${id}`;
 
-  if (n === 1) { cols = 1; }
-  else if (n === 2) { cols = window.innerWidth < 480 ? 1 : 2; }
-  else if (n <= 4) { cols = 2; }
-  else if (n <= 6) { cols = 3; }
-  else { cols = Math.ceil(Math.sqrt(n)); }
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.playsInline = true;           // iOS bắt buộc
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.muted = (id === 'local');     // Local video phải mute
+  video.srcObject = stream;
 
-  rows = Math.ceil(n / cols);
+  // Đảm bảo video play sau khi set srcObject (iOS quirk)
+  video.onloadedmetadata = () => video.play().catch(() => {});
 
-  var availH = grid.clientHeight - gap * (rows - 1) - 8 * 2;
-  var cellH  = availH / rows;
-  var cellW  = (W - gap * (cols - 1)) / cols;
+  const lbl = document.createElement('div');
+  lbl.className = 'label';
+  lbl.textContent = label || id.slice(0, 6);
 
-  // Giữ tỉ lệ 4:3 nhưng không quá to
-  var byRatio = cellW * 3 / 4;
-  var h = Math.min(cellH, byRatio, 300);
-  var w = h * 4 / 3;
-  if (w > cellW) { w = cellW; h = w * 3 / 4; }
+  const overlay = document.createElement('div');
+  overlay.className = 'cam-off-overlay';
+  overlay.innerHTML = `<div class="avatar">👤</div><span>Cam tắt</span>`;
 
-  for (var i = 0; i < wrappers.length; i++) {
-    wrappers[i].style.width  = Math.floor(w) + 'px';
-    wrappers[i].style.height = Math.floor(h) + 'px';
+  card.appendChild(video);
+  card.appendChild(lbl);
+  card.appendChild(overlay);
+  return card;
+}
+
+function addVideoCard(id, stream, label) {
+  const grid = document.getElementById('video-grid');
+  if (document.getElementById(`card-${id}`)) return;
+  const card = createVideoCard(id, stream, label);
+  grid.appendChild(card);
+  updateGrid();
+}
+
+function removeVideoCard(id) {
+  const card = document.getElementById(`card-${id}`);
+  if (card) card.remove();
+  updateGrid();
+}
+
+// ─────────────────────────────────────────────
+//  LOCAL MEDIA
+// ─────────────────────────────────────────────
+async function getLocalStream(constraints = CONSTRAINTS) {
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (e) {
+    // Fallback: thử video only
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    } catch (e2) {
+      showToast('⚠️ Không truy cập được camera/mic');
+      return null;
+    }
   }
 }
 
-window.addEventListener('resize', function() { setTimeout(layoutVideos, 100); });
-window.addEventListener('orientationchange', function() { setTimeout(layoutVideos, 400); });
+async function init() {
+  showToast('⏳ Đang mở camera…', 5000);
+  localStream = await getLocalStream();
+  if (!localStream) return;
 
-// ═══════════════════════════════════════════════════
-// SOCKET
-// ═══════════════════════════════════════════════════
-var socket = io({ transports: ['websocket'], upgrade: false });
-
-socket.on('connect', function() {
-  myId = socket.id;
-  setStatus('Đã kết nối', false);
-  startMedia();
-});
-
-socket.on('disconnect', function() { setStatus('Mất kết nối', true); });
-
-socket.on('existing-users', function(userIds) {
-  // Tạo offer tuần tự để tránh race trên Safari cũ
-  var chain = Promise.resolve();
-  userIds.forEach(function(uid) {
-    chain = chain.then(function() { return createOffer(uid); });
-  });
-  chain.then(updateCount);
-});
-
-socket.on('user-joined', function(data) {
-  updateCount();
-});
-
-socket.on('offer', function(data) {
-  handleOffer(data.from, data.offer);
-});
-
-socket.on('answer', function(data) {
-  handleAnswer(data.from, data.answer);
-});
-
-socket.on('ice-candidate', function(data) {
-  handleIce(data.from, data.candidate);
-});
-
-socket.on('user-left', function(data) {
-  closePeer(data.userId);
-  updateCount();
-});
-
-// ═══════════════════════════════════════════════════
-// MEDIA
-// ═══════════════════════════════════════════════════
-function startMedia() {
-  detectCameras();
-  // iOS 12: bắt đầu với constraint đơn giản
-  var constraints = buildConstraints(facingMode);
-  navigator.mediaDevices.getUserMedia(constraints)
-    .then(function(stream) {
-      localStream = stream;
-      addVideoEl('local', stream, 'Bạn', true);
-      socket.emit('join');
-      layoutVideos();
-    })
-    .catch(function(err) {
-      console.error('getUserMedia error:', err);
-      showError('Không truy cập được camera: ' + err.message);
-      // Thử audio-only
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function(stream) {
-          localStream = stream;
-          addVideoEl('local', stream, 'Bạn (no cam)', true);
-          socket.emit('join');
-        })
-        .catch(function() {
-          localStream = new MediaStream();
-          addVideoEl('local', localStream, 'Bạn', true);
-          socket.emit('join');
-        });
-    });
+  addVideoCard('local', localStream, 'Bạn');
+  showToast('✅ Camera sẵn sàng');
+  socket.connect();
 }
 
-function buildConstraints(facing) {
-  // iOS 12: tránh dùng { ideal } cho facingMode, dùng string thẳng
-  // Tránh width/height constraint cao vì iOS 12 hay fail
-  return {
-    video: { facingMode: facing },
-    audio: true   // đơn giản nhất cho iOS 12
-  };
-}
+// ─────────────────────────────────────────────
+//  WEBRTC PEER
+// ─────────────────────────────────────────────
+function createPeer(peerId, polite) {
+  const pc = new RTCPeerConnection(ICE_SERVERS);
 
-// ═══════════════════════════════════════════════════
-// SWAP CAM
-// ═══════════════════════════════════════════════════
-function swapCam() {
-  if (isSwapping || !localStream) return;
-  isSwapping = true;
-
-  var btn = document.getElementById('btn-swap');
-  btn.disabled = true;
-  btn.classList.add('swapping');
-
-  var newFacing = facingMode === 'user' ? 'environment' : 'user';
-
-  // iOS 12: stop tất cả video tracks trước
-  var videoTracks = localStream.getVideoTracks();
-  videoTracks.forEach(function(t) { t.stop(); });
-
-  var constraints = buildConstraints(newFacing);
-
-  navigator.mediaDevices.getUserMedia(constraints)
-    .then(function(newStream) {
-      facingMode = newFacing;
-
-      var newVideoTrack = newStream.getVideoTracks()[0];
-
-      // Xoá video track cũ khỏi localStream
-      localStream.getVideoTracks().forEach(function(t) {
-        localStream.removeTrack(t);
-      });
-
-      // Thêm video track mới
-      if (newVideoTrack) {
-        newVideoTrack.enabled = camOn;
-        localStream.addTrack(newVideoTrack);
-      }
-
-      // Dừng audio dư (đã có audio từ localStream)
-      newStream.getAudioTracks().forEach(function(t) { t.stop(); });
-
-      // Cập nhật video element
-      var localVideo = document.getElementById('video-local');
-      var localWrap  = document.getElementById('wrapper-local');
-      if (localVideo) {
-        // iOS: cần set srcObject lại
-        localVideo.srcObject = null;
-        localVideo.srcObject = localStream;
-        localVideo.play().catch(function() {});
-      }
-      if (localWrap) {
-        if (facingMode === 'user') {
-          localWrap.classList.add('local');
-        } else {
-          localWrap.classList.remove('local');
-        }
-      }
-
-      // Replace track trên từng peer — iOS 12: replaceTrack có thể lỗi
-      // dùng try/catch từng cái
-      var peerIds = Object.keys(peers);
-      var idx = 0;
-
-      function replaceNext() {
-        if (idx >= peerIds.length) return doneSwap();
-        var pc = peers[peerIds[idx]];
-        idx++;
-        if (!pc) return replaceNext();
-
-        var senders = pc.getSenders();
-        var videoSender = null;
-        for (var i = 0; i < senders.length; i++) {
-          if (senders[i].track && senders[i].track.kind === 'video') {
-            videoSender = senders[i];
-            break;
-          }
-        }
-
-        if (videoSender && newVideoTrack) {
-          videoSender.replaceTrack(newVideoTrack)
-            .then(replaceNext)
-            .catch(function(e) {
-              console.warn('replaceTrack failed, renegotiating:', e);
-              // Fallback: renegotiate
-              renegotiate(peerIds[idx - 1]);
-              replaceNext();
-            });
-        } else {
-          replaceNext();
-        }
-      }
-
-      replaceNext();
-    })
-    .catch(function(err) {
-      console.error('swapCam error:', err);
-      showError('Không đổi được camera');
-      // Restore track cũ
-      navigator.mediaDevices.getUserMedia(buildConstraints(facingMode))
-        .then(function(s) {
-          var vt = s.getVideoTracks()[0];
-          if (vt) {
-            vt.enabled = camOn;
-            localStream.addTrack(vt);
-          }
-          s.getAudioTracks().forEach(function(t) { t.stop(); });
-          var lv = document.getElementById('video-local');
-          if (lv) { lv.srcObject = localStream; lv.play().catch(function(){}); }
-          doneSwap();
-        })
-        .catch(function() { doneSwap(); });
-    });
-}
-
-function doneSwap() {
-  isSwapping = false;
-  var btn = document.getElementById('btn-swap');
-  btn.disabled = false;
-  btn.classList.remove('swapping');
-}
-
-// ═══════════════════════════════════════════════════
-// PEER CONNECTION
-// ═══════════════════════════════════════════════════
-function getOrCreatePC(peerId) {
-  if (peers[peerId]) return peers[peerId];
-
-  var pc = new RTCPeerConnection(ICE_SERVERS);
-  peers[peerId]  = pc;
-  iceBuf[peerId] = [];
-
-  // Thêm tracks
+  // Add local tracks
   if (localStream) {
-    var tracks = localStream.getTracks();
-    for (var i = 0; i < tracks.length; i++) {
-      pc.addTrack(tracks[i], localStream);
-    }
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
   }
 
-  pc.ontrack = function(evt) {
-    var stream = evt.streams && evt.streams[0];
+  // Nhận stream từ peer
+  pc.ontrack = (e) => {
+    const stream = e.streams[0];
     if (!stream) return;
-    var el = document.getElementById('video-' + peerId);
-    if (el) {
-      el.srcObject = stream;
-      el.play().catch(function() {});
+    const card = document.getElementById(`card-${peerId}`);
+    if (card) {
+      const v = card.querySelector('video');
+      if (v.srcObject !== stream) {
+        v.srcObject = stream;
+        v.play().catch(() => {});
+      }
     } else {
-      addVideoEl(peerId, stream, shortId(peerId), false);
-    }
-    updateCount();
-    setTimeout(layoutVideos, 100);
-  };
-
-  pc.onicecandidate = function(evt) {
-    if (evt.candidate) {
-      socket.emit('ice-candidate', { to: peerId, candidate: evt.candidate });
+      addVideoCard(peerId, stream);
     }
   };
 
-  pc.onconnectionstatechange = function() {
-    var state = pc.connectionState;
-    console.log('[' + shortId(peerId) + '] conn:', state);
-    if (state === 'failed') {
+  // ICE candidate
+  pc.onicecandidate = ({ candidate }) => {
+    if (candidate) {
+      socket.emit('ice-candidate', { to: peerId, candidate });
+    }
+  };
+
+  // ICE connection state — hiển thị trạng thái
+  pc.oniceconnectionstatechange = () => {
+    console.log(`[${peerId.slice(0,6)}] ICE:`, pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') {
       pc.restartIce();
     }
-    if (state === 'disconnected' || state === 'closed' || state === 'failed') {
-      closePeer(peerId);
-      updateCount();
+    if (pc.iceConnectionState === 'disconnected') {
+      setTimeout(() => {
+        if (pc.iceConnectionState === 'disconnected') pc.restartIce();
+      }, 3000);
     }
   };
 
-  // iOS Safari fallback: dùng iceConnectionState nếu connectionState không fire
-  pc.oniceconnectionstatechange = function() {
-    var s = pc.iceConnectionState;
-    console.log('[' + shortId(peerId) + '] ice:', s);
-    if (s === 'failed') {
-      try { pc.restartIce(); } catch(e) {}
-    }
-    if (s === 'closed') {
-      closePeer(peerId);
-      updateCount();
+  pc.onconnectionstatechange = () => {
+    console.log(`[${peerId.slice(0,6)}] Connection:`, pc.connectionState);
+    if (['failed', 'closed'].includes(pc.connectionState)) {
+      cleanupPeer(peerId);
     }
   };
 
+  // Negotiation needed (Perfect Negotiation)
+  pc.onnegotiationneeded = async () => {
+    if (!polite) return; // chỉ impolite peer tạo offer
+    try {
+      makingOffer = true;
+      await pc.setLocalDescription();
+      socket.emit('offer', { to: peerId, offer: pc.localDescription });
+    } catch (e) {
+      console.error('onnegotiationneeded error:', e);
+    } finally {
+      makingOffer = false;
+    }
+  };
+
+  peers.set(peerId, { pc, polite });
   return pc;
 }
 
-function createOffer(peerId) {
-  var pc = getOrCreatePC(peerId);
-  return pc.createOffer()
-    .then(function(offer) {
-      return pc.setLocalDescription(offer);
-    })
-    .then(function() {
-      socket.emit('offer', { to: peerId, offer: pc.localDescription });
-    })
-    .catch(function(e) {
-      console.error('createOffer:', e);
+async function callPeer(peerId) {
+  // Ta là người gọi = impolite
+  const pc = createPeer(peerId, false);
+  addVideoCard(peerId, new MediaStream(), `<span class="connecting-dot"></span>${peerId.slice(0,6)}`);
+
+  try {
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
     });
-}
-
-function handleOffer(from, offer) {
-  var pc = getOrCreatePC(from);
-
-  // iOS 12 không support rollback → dùng cách đơn giản
-  var p;
-  if (pc.signalingState !== 'stable') {
-    // Tạo lại PC nếu state sai
-    console.warn('Bad signalingState', pc.signalingState, '— recreating PC for', from);
-    pc.close();
-    delete peers[from];
-    delete iceBuf[from];
-    pc = getOrCreatePC(from);
-    p = pc.setRemoteDescription(new RTCSessionDescription(offer));
-  } else {
-    p = pc.setRemoteDescription(new RTCSessionDescription(offer));
-  }
-
-  p.then(function() {
-    return flushIceBuf(from);
-  })
-  .then(function() {
-    return pc.createAnswer();
-  })
-  .then(function(answer) {
-    return pc.setLocalDescription(answer);
-  })
-  .then(function() {
-    socket.emit('answer', { to: from, answer: pc.localDescription });
-  })
-  .catch(function(e) {
-    console.error('handleOffer:', e);
-  });
-}
-
-function handleAnswer(from, answer) {
-  var pc = peers[from];
-  if (!pc) return;
-  if (pc.signalingState !== 'have-local-offer') return;
-  pc.setRemoteDescription(new RTCSessionDescription(answer))
-    .then(function() { return flushIceBuf(from); })
-    .catch(function(e) { console.error('handleAnswer:', e); });
-}
-
-function handleIce(from, candidate) {
-  var pc = peers[from];
-  if (!pc) return;
-  var rd = pc.remoteDescription;
-  if (rd && rd.type) {
-    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function() {});
-  } else {
-    if (!iceBuf[from]) iceBuf[from] = [];
-    iceBuf[from].push(candidate);
+    await pc.setLocalDescription(offer);
+    socket.emit('offer', { to: peerId, offer: pc.localDescription });
+  } catch (e) {
+    console.error('callPeer error:', e);
   }
 }
 
-function flushIceBuf(peerId) {
-  var buf = iceBuf[peerId] || [];
-  var pc  = peers[peerId];
-  if (!pc) return Promise.resolve();
-  iceBuf[peerId] = [];
-
-  var chain = Promise.resolve();
-  buf.forEach(function(c) {
-    chain = chain.then(function() {
-      return pc.addIceCandidate(new RTCIceCandidate(c)).catch(function() {});
-    });
-  });
-  return chain;
-}
-
-function renegotiate(peerId) {
-  var pc = peers[peerId];
-  if (!pc || pc.signalingState !== 'stable') return;
-  pc.createOffer()
-    .then(function(offer) { return pc.setLocalDescription(offer); })
-    .then(function() {
-      socket.emit('offer', { to: peerId, offer: pc.localDescription });
-    })
-    .catch(function(e) { console.warn('renegotiate:', e); });
-}
-
-function closePeer(peerId) {
-  var pc = peers[peerId];
-  if (pc) {
-    try { pc.close(); } catch(e) {}
-    delete peers[peerId];
-    delete iceBuf[peerId];
+function cleanupPeer(peerId) {
+  const p = peers.get(peerId);
+  if (p) {
+    p.pc.close();
+    peers.delete(peerId);
   }
-  var el = document.getElementById('wrapper-' + peerId);
-  if (el) el.parentNode.removeChild(el);
-  setTimeout(layoutVideos, 100);
+  pendingCandidates.delete(peerId);
+  removeVideoCard(peerId);
 }
 
-// ═══════════════════════════════════════════════════
-// DOM VIDEO
-// ═══════════════════════════════════════════════════
-function addVideoEl(id, stream, label, muted) {
-  if (document.getElementById('wrapper-' + id)) return;
+// ─────────────────────────────────────────────
+//  SIGNALING HANDLERS (Perfect Negotiation)
+// ─────────────────────────────────────────────
+socket.on('existing-users', (userIds) => {
+  userIds.forEach(id => callPeer(id));
+});
 
-  var wrapper = document.createElement('div');
-  wrapper.className = 'video-wrapper' + (id === 'local' ? ' local' : '');
-  wrapper.id = 'wrapper-' + id;
+socket.on('user-joined', (userId) => {
+  // Người mới vào — họ sẽ gọi ta (polite = ta)
+  // Ta tạo sẵn peer nhưng chờ offer từ họ
+  if (!peers.has(userId)) {
+    createPeer(userId, true);
+    addVideoCard(userId, new MediaStream(), userId.slice(0, 6));
+  }
+  showToast(`👋 Có người vào (${userId.slice(0,4)})`);
+});
 
-  var video = document.createElement('video');
-  video.id = 'video-' + id;
-  video.autoplay = true;
-  video.muted = muted;
-  video.setAttribute('autoplay', '');
-  video.setAttribute('playsinline', '');          // iOS Safari
-  video.setAttribute('webkit-playsinline', '');   // iOS cũ
-  video.setAttribute('muted', '');
-  video.srcObject = stream;
+socket.on('offer', async ({ from, offer }) => {
+  let peerData = peers.get(from);
+  if (!peerData) {
+    // Tạo peer nếu chưa có (edge case)
+    createPeer(from, true);
+    peerData = peers.get(from);
+    addVideoCard(from, new MediaStream(), from.slice(0, 6));
+  }
+  const { pc, polite } = peerData;
+  const offerCollision = makingOffer || pc.signalingState !== 'stable';
 
-  // iOS 12: cần play() thủ công sau metadata
-  video.addEventListener('loadedmetadata', function() {
-    var p = video.play();
-    if (p) p.catch(function() {});
-  });
-  // Dự phòng
-  setTimeout(function() {
-    if (video.paused) video.play().catch(function() {});
-  }, 1000);
+  if (!polite && offerCollision) {
+    return; // impolite peer bỏ qua offer va chạm
+  }
 
-  var lbl = document.createElement('div');
-  lbl.className = 'label';
-  lbl.textContent = label;
-
-  var overlay = document.createElement('div');
-  overlay.className = 'cam-off-overlay';
-  overlay.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
-    '<path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>' +
-    '<line x1="3" y1="3" x2="21" y2="21"/></svg>' +
-    '<span>Cam tắt</span>';
-
-  wrapper.appendChild(video);
-  wrapper.appendChild(lbl);
-  wrapper.appendChild(overlay);
-  grid.appendChild(wrapper);
-
-  setTimeout(layoutVideos, 50);
-}
-
-// ═══════════════════════════════════════════════════
-// CONTROLS
-// ═══════════════════════════════════════════════════
-function toggleCam() {
-  if (!localStream) return;
-  camOn = !camOn;
-  localStream.getVideoTracks().forEach(function(t) { t.enabled = camOn; });
-
-  var btn  = document.getElementById('btn-cam');
-  var wrap = document.getElementById('wrapper-local');
-  btn.classList.toggle('off', !camOn);
-  if (wrap) wrap.classList.toggle('cam-off', !camOn);
-
-  // Cập nhật icon đơn giản
-  var icon = document.getElementById('icon-cam');
-  if (icon) {
-    if (camOn) {
-      icon.innerHTML = '<path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>';
-    } else {
-      icon.innerHTML = '<path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><line x1="3" y1="3" x2="21" y2="21"/>';
+  try {
+    await pc.setRemoteDescription(offer);
+    // Flush pending ICE candidates
+    const queued = pendingCandidates.get(from) || [];
+    for (const c of queued) {
+      await pc.addIceCandidate(c).catch(() => {});
     }
-  }
-}
+    pendingCandidates.delete(from);
 
-function toggleMic() {
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('answer', { to: from, answer: pc.localDescription });
+  } catch (e) {
+    console.error('offer handler error:', e);
+  }
+});
+
+socket.on('answer', async ({ from, answer }) => {
+  const p = peers.get(from);
+  if (!p) return;
+  try {
+    if (p.pc.signalingState !== 'have-local-offer') return;
+    await p.pc.setRemoteDescription(answer);
+    // Flush pending ICE
+    const queued = pendingCandidates.get(from) || [];
+    for (const c of queued) {
+      await p.pc.addIceCandidate(c).catch(() => {});
+    }
+    pendingCandidates.delete(from);
+  } catch (e) {
+    console.error('answer handler error:', e);
+  }
+});
+
+socket.on('ice-candidate', async ({ from, candidate }) => {
+  const p = peers.get(from);
+  if (!p) return;
+  const c = new RTCIceCandidate(candidate);
+  if (p.pc.remoteDescription && p.pc.remoteDescription.type) {
+    await p.pc.addIceCandidate(c).catch(() => {});
+  } else {
+    // Queue lại — chưa có remoteDescription
+    if (!pendingCandidates.has(from)) pendingCandidates.set(from, []);
+    pendingCandidates.get(from).push(c);
+  }
+});
+
+socket.on('user-left', (userId) => {
+  cleanupPeer(userId);
+  showToast(`👋 ${userId.slice(0,4)} đã rời`);
+});
+
+socket.on('disconnect', () => {
+  showToast('⚠️ Mất kết nối server, đang thử lại…', 5000);
+});
+
+socket.on('connect', () => {
+  showToast('🟢 Đã kết nối', 1500);
+});
+
+// ─────────────────────────────────────────────
+//  CONTROLS
+// ─────────────────────────────────────────────
+document.getElementById('btn-mic').addEventListener('click', () => {
   if (!localStream) return;
   micOn = !micOn;
-  localStream.getAudioTracks().forEach(function(t) { t.enabled = micOn; });
-
-  var btn  = document.getElementById('btn-mic');
+  localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  const btn = document.getElementById('btn-mic');
+  btn.textContent = micOn ? '🎙️' : '🔇';
   btn.classList.toggle('off', !micOn);
+  showToast(micOn ? '🎙️ Mic bật' : '🔇 Mic tắt', 1500);
+});
 
-  var icon = document.getElementById('icon-mic');
-  if (icon) {
-    if (micOn) {
-      icon.innerHTML = '<path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>';
-    } else {
-      icon.innerHTML = '<path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><line x1="3" y1="3" x2="21" y2="21"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>';
-    }
-  }
-}
+document.getElementById('btn-cam').addEventListener('click', async () => {
+  if (!localStream) return;
+  camOn = !camOn;
+  localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  const btn = document.getElementById('btn-cam');
+  btn.textContent = camOn ? '📹' : '🚫';
+  btn.classList.toggle('off', !camOn);
+  const card = document.getElementById('card-local');
+  if (card) card.classList.toggle('cam-off', !camOn);
+  showToast(camOn ? '📹 Cam bật' : '🚫 Cam tắt', 1500);
+});
 
-// ═══════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════
-function setStatus(msg, isErr) {
-  statusEl.textContent = msg;
-  statusEl.className   = isErr ? 'error' : '';
-}
+document.getElementById('btn-swap').addEventListener('click', async () => {
+  if (!localStream) return;
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
 
-function updateCount() {
-  peerCount.textContent = '👥 ' + (Object.keys(peers).length + 1);
-}
-
-function shortId(id) {
-  return 'U-' + id.slice(0, 4).toUpperCase();
-}
-
-function showError(msg) {
-  errorBox.textContent = msg;
-  errorBox.style.display = 'block';
-  setTimeout(function() { errorBox.style.display = 'none'; }, 4000);
-}
-
-// Wake lock (iOS 12 không support, bỏ qua lỗi)
-(function() {
   try {
-    if (navigator.wakeLock) {
-      navigator.wakeLock.request('screen').catch(function() {});
-      document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible') {
-          navigator.wakeLock.request('screen').catch(function() {});
-        }
-      });
+    const newConstraints = {
+      ...CONSTRAINTS,
+      video: { ...CONSTRAINTS.video, facingMode }
+    };
+    const newStream = await navigator.mediaDevices.getUserMedia(newConstraints);
+    const newVideoTrack = newStream.getVideoTracks()[0];
+
+    // Thay track trong tất cả peer connections
+    peers.forEach(({ pc }) => {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+    });
+
+    // Thay local track
+    const oldVideoTrack = localStream.getVideoTracks()[0];
+    if (oldVideoTrack) {
+      localStream.removeTrack(oldVideoTrack);
+      oldVideoTrack.stop();
     }
-  } catch(e) {}
-})();
+    localStream.addTrack(newVideoTrack);
+
+    // Cập nhật local video
+    const localVideo = document.querySelector('#card-local video');
+    if (localVideo) {
+      localVideo.srcObject = localStream;
+      localVideo.play().catch(() => {});
+    }
+
+    showToast(facingMode === 'user' ? '🤳 Camera trước' : '📷 Camera sau', 1500);
+  } catch (e) {
+    console.error('swap camera error:', e);
+    facingMode = facingMode === 'user' ? 'environment' : 'user'; // revert
+    showToast('⚠️ Không đổi được camera', 2000);
+  }
+});
+
+// ─────────────────────────────────────────────
+//  KHỞI ĐỘNG
+// ─────────────────────────────────────────────
+init();
 </script>
 </body>
 </html>
