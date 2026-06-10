@@ -1,721 +1,704 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Video Call Đa Người - WebRTC</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<title>WebRTC Meet</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body {
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: linear-gradient(145deg, #10141c 0%, #1a1f2a 100%);
-            min-height: 100vh;
-            color: #fff;
-            padding: 16px;
-            padding-bottom: 90px;
-        }
+  :root {
+    --bg: #202124;
+    --surface: #2d2e30;
+    --card: #3c4043;
+    --accent: #8ab4f8;
+    --green: #34a853;
+    --red: #ea4335;
+    --yellow: #fbbc04;
+    --text: #e8eaed;
+    --subtext: #9aa0a6;
+    --bar-h: 80px;
+    --radius: 12px;
+  }
 
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 12px 0;
-        }
-        .header h1 {
-            font-size: 1.6rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, #E0E7FF, #A5F3FC);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            letter-spacing: -0.3px;
-        }
-        .badge {
-            background: rgba(255,255,255,0.12);
-            backdrop-filter: blur(8px);
-            border-radius: 40px;
-            padding: 6px 14px;
-            font-size: 0.8rem;
-            display: inline-block;
-            margin-top: 8px;
-            font-weight: 500;
-            color: #CBD5E1;
-        }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Google Sans', 'Roboto', sans-serif;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-        /* Grid video container */
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-            max-width: 1400px;
-            margin-left: auto;
-            margin-right: auto;
-        }
+  /* ── Màn chờ ── */
+  #lobby {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 20px;
+    padding: 24px;
+    background: var(--bg);
+  }
+  #lobby h1 { font-size: 1.6rem; font-weight: 600; color: var(--text); }
+  #lobby p  { color: var(--subtext); font-size: .9rem; text-align: center; }
+  #nameInput {
+    width: 100%; max-width: 340px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1.5px solid var(--card);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+  }
+  #nameInput:focus { border-color: var(--accent); }
+  #joinBtn {
+    width: 100%; max-width: 340px;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #202124;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  #joinBtn:active { opacity: .8; }
 
-        /* Video card */
-        .video-card {
-            background: #0a0e14;
-            border-radius: 28px;
-            overflow: hidden;
-            position: relative;
-            aspect-ratio: 4 / 3;
-            box-shadow: 0 12px 28px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.08);
-            transition: transform 0.2s ease, box-shadow 0.2s;
-        }
-        .video-card:hover {
-            transform: scale(1.01);
-            box-shadow: 0 20px 32px rgba(0,0,0,0.6);
-        }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background: #000;
-            display: block;
-        }
-        .video-label {
-            position: absolute;
-            bottom: 12px;
-            left: 12px;
-            background: rgba(0,0,0,0.65);
-            backdrop-filter: blur(8px);
-            padding: 5px 12px;
-            border-radius: 30px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.3px;
-            color: #f1f5f9;
-            pointer-events: none;
-            z-index: 2;
-        }
-        .video-status {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            display: flex;
-            gap: 8px;
-            background: rgba(0,0,0,0.55);
-            backdrop-filter: blur(4px);
-            padding: 4px 10px;
-            border-radius: 40px;
-            font-size: 0.7rem;
-            font-weight: 500;
-            z-index: 2;
-        }
-        .mic-off-icon, .cam-off-icon {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .off-badge {
-            background: #dc2626;
-            border-radius: 20px;
-            padding: 2px 8px;
-            font-size: 0.65rem;
-        }
+  /* ── Meeting ── */
+  #meeting {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    background: var(--bg);
+  }
 
-        /* Control bar */
-        .control-bar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(24, 28, 38, 0.92);
-            backdrop-filter: blur(20px);
-            border-radius: 60px;
-            padding: 10px 20px;
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            align-items: center;
-            border: 1px solid rgba(255,255,255,0.2);
-            box-shadow: 0 8px 28px rgba(0,0,0,0.4);
-            z-index: 100;
-        }
-        .ctrl-btn {
-            background: #2d3748;
-            border: none;
-            width: 54px;
-            height: 54px;
-            border-radius: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            color: white;
-            font-size: 1.6rem;
-        }
-        .ctrl-btn:active {
-            transform: scale(0.94);
-            background: #1f2a3e;
-        }
-        .ctrl-btn.active {
-            background: #3b82f6;
-            color: white;
-        }
-        .ctrl-btn.danger {
-            background: #dc2626;
-        }
-        .ctrl-btn.danger.active {
-            background: #ef4444;
-        }
-        .ctrl-btn.swap {
-            background: #0f172a;
-            border: 1px solid #38bdf8;
-        }
-        @media (max-width: 560px) {
-            .ctrl-btn { width: 48px; height: 48px; font-size: 1.4rem; }
-            .control-bar { gap: 12px; padding: 8px 16px; bottom: 16px; }
-            .video-grid { gap: 12px; grid-template-columns: 1fr; }
-        }
+  /* Grid video - Google Meet style */
+  #videoGrid {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+    align-content: start;
+    -webkit-overflow-scrolling: touch;
+  }
 
-        /* thông báo */
-        .info-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 20px;
-            right: 20px;
-            background: #1e293b;
-            border-left: 4px solid #3b82f6;
-            padding: 10px 16px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            z-index: 99;
-            text-align: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-            pointer-events: none;
-            backdrop-filter: blur(12px);
-            font-weight: 500;
-        }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #0a0e14ee;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 200;
-            backdrop-filter: blur(4px);
-            flex-direction: column;
-            gap: 20px;
-            transition: all 0.2s;
-        }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid #ffffff30;
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .hidden {
-            display: none;
-        }
-        button:disabled {
-            opacity: 0.5;
-            transform: none;
-        }
-    </style>
-    <script src="/socket.io/socket.io.js"></script>
+  /* Layout tự động theo số người */
+  #videoGrid.count-1 { grid-template-columns: 1fr; }
+  #videoGrid.count-2 { grid-template-columns: 1fr 1fr; }
+  #videoGrid.count-3 { grid-template-columns: 1fr 1fr; }
+  #videoGrid.count-4 { grid-template-columns: 1fr 1fr; }
+  #videoGrid.count-many { grid-template-columns: 1fr 1fr 1fr; }
+
+  @media (max-width: 600px) {
+    #videoGrid.count-1 { grid-template-columns: 1fr; }
+    #videoGrid.count-2 { grid-template-columns: 1fr 1fr; }
+    #videoGrid.count-3 { grid-template-columns: 1fr 1fr; }
+    #videoGrid.count-4 { grid-template-columns: 1fr 1fr; }
+    #videoGrid.count-many { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* Card video - giống Google Meet */
+  .video-card {
+    position: relative;
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+    aspect-ratio: 16/9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #videoGrid.count-1 .video-card { aspect-ratio: 16/9; max-height: calc(100dvh - var(--bar-h) - 16px); }
+
+  .video-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+  .video-card video.cam-off { display: none; }
+
+  /* Avatar khi tắt cam */
+  .avatar-wrap {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface);
+  }
+  .avatar-wrap.show { display: flex; }
+  .avatar-circle {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  /* Tên + trạng thái */
+  .name-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 6px 10px;
+    background: linear-gradient(transparent, rgba(0,0,0,.7));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .name-bar span { font-size: .78rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mic-icon { font-size: .85rem; flex-shrink: 0; }
+  .mic-icon.muted { color: var(--red); }
+  .mic-icon.active { color: var(--text); }
+
+  /* ── Thanh điều khiển ── */
+  #controls {
+    height: var(--bar-h);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 0 12px;
+    flex-shrink: 0;
+    border-top: 1px solid #3c4043;
+    position: relative;
+    z-index: 10;
+  }
+
+  .ctrl-btn {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    transition: background .15s, transform .1s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .ctrl-btn:active { transform: scale(.9); }
+
+  .ctrl-btn.on  { background: var(--card); color: var(--text); }
+  .ctrl-btn.off { background: var(--red);  color: #fff; }
+  .ctrl-btn.swap { background: var(--card); color: var(--accent); }
+  .ctrl-btn.end  { background: var(--red);  color: #fff; }
+
+  /* ── Toast thông báo ── */
+  #toast {
+    position: fixed;
+    top: 16px; left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--card);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: .85rem;
+    z-index: 999;
+    transition: transform .3s ease;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Chỉ số người ── */
+  #peerCount {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: .75rem;
+    color: var(--subtext);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  #peerCount i { color: var(--green); font-size: .6rem; }
+
+  /* iOS safe area */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    #controls { padding-bottom: calc(8px + env(safe-area-inset-bottom)); height: calc(var(--bar-h) + env(safe-area-inset-bottom)); }
+  }
+</style>
 </head>
 <body>
 
-<div class="header">
-    <h1>📡 MeetNow · Không mã phòng</h1>
-    <div class="badge" id="roomBadge">Đang kết nối ...</div>
+<!-- LOBBY -->
+<div id="lobby">
+  <h1><i class="fa-solid fa-video" style="color:var(--accent)"></i> WebRTC Meet</h1>
+  <p>Vào là gặp — không cần mã phòng</p>
+  <input id="nameInput" type="text" placeholder="Nhập tên của bạn..." maxlength="20" autocomplete="off"/>
+  <button id="joinBtn"><i class="fa-solid fa-arrow-right-to-bracket"></i> Tham gia ngay</button>
 </div>
 
-<div class="video-grid" id="videoGrid">
-    <!-- Local video sẽ thêm động -->
+<!-- MEETING -->
+<div id="meeting">
+  <div id="videoGrid" class="count-1"></div>
+  <div id="controls">
+    <button class="ctrl-btn on"  id="btnMic"  title="Mic"><i class="fa-solid fa-microphone"></i></button>
+    <button class="ctrl-btn on"  id="btnCam"  title="Camera"><i class="fa-solid fa-video"></i></button>
+    <button class="ctrl-btn swap" id="btnSwap" title="Đổi camera"><i class="fa-solid fa-rotate"></i></button>
+    <button class="ctrl-btn end"  id="btnEnd"  title="Rời phòng"><i class="fa-solid fa-phone-slash"></i></button>
+    <div id="peerCount"><i class="fa-solid fa-circle"></i> <span id="countNum">1</span> người</div>
+  </div>
 </div>
 
-<div class="control-bar">
-    <button class="ctrl-btn" id="toggleVideoBtn" title="Bật/Tắt Camera">🎥</button>
-    <button class="ctrl-btn" id="toggleAudioBtn" title="Bật/Tắt Micro">🎤</button>
-    <button class="ctrl-btn swap" id="swapCameraBtn" title="Đổi camera trước/sau">🔄</button>
-</div>
+<div id="toast"></div>
 
-<div id="toastMsg" class="info-toast"></div>
-<div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <div>Đang truy cập camera & micro...</div>
-</div>
-
+<!-- Socket.IO -->
+<script src="/socket.io/socket.io.js"></script>
 <script>
-    // =============== CẤU HÌNH ===============
-    const ICE_SERVERS = {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    // TURN miễn phí (tăng tỷ lệ kết nối qua NAT/mobile)
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ]
+};
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let socket;
+let localStream = null;
+let myName = '';
+let peers = {};          // peerId -> RTCPeerConnection
+let peerNames = {};      // peerId -> name
+let peerMediaState = {}; // peerId -> { mic, cam }
+let micOn = true;
+let camOn = true;
+let currentFacing = 'user'; // 'user' | 'environment'
+let isSwapping = false;
+
+// ═══════════════════════════════════════════════
+// MEDIA
+// ═══════════════════════════════════════════════
+async function getMedia(facingMode = 'user') {
+  const constraints = {
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    },
+    video: {
+      facingMode,
+      width:  { ideal: 640, max: 1280 },
+      height: { ideal: 480, max: 720 },
+      frameRate: { ideal: 15, max: 30 }
+    }
+  };
+  // iOS 12 fallback
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (e) {
+    // Thử lại không có facingMode nếu lỗi
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } catch (e2) {
+      showToast('⚠️ Không thể truy cập camera/mic');
+      throw e2;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function updateGrid() {
+  const grid = document.getElementById('videoGrid');
+  const n = grid.children.length;
+  grid.className = '';
+  if (n <= 1) grid.classList.add('count-1');
+  else if (n === 2) grid.classList.add('count-2');
+  else if (n === 3) grid.classList.add('count-3');
+  else if (n === 4) grid.classList.add('count-4');
+  else grid.classList.add('count-many');
+  document.getElementById('countNum').textContent = n;
+}
+
+function makeCard(id, name, stream, isLocal = false) {
+  const card = document.createElement('div');
+  card.className = 'video-card';
+  card.id = 'card-' + id;
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.playsInline = true; // quan trọng cho iOS
+  video.muted = isLocal;    // local mute tránh echo
+  if (stream) video.srcObject = stream;
+
+  // Avatar khi tắt cam
+  const avatarWrap = document.createElement('div');
+  avatarWrap.className = 'avatar-wrap';
+  avatarWrap.id = 'avatar-' + id;
+  const avatarCircle = document.createElement('div');
+  avatarCircle.className = 'avatar-circle';
+  avatarCircle.id = 'avatarLetter-' + id;
+  avatarCircle.textContent = (name || '?').charAt(0);
+  avatarWrap.appendChild(avatarCircle);
+
+  // Thanh tên + mic
+  const nameBar = document.createElement('div');
+  nameBar.className = 'name-bar';
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = name + (isLocal ? ' (Bạn)' : '');
+  const micIco = document.createElement('i');
+  micIco.className = 'fa-solid fa-microphone mic-icon active';
+  micIco.id = 'mic-icon-' + id;
+  nameBar.appendChild(nameSpan);
+  nameBar.appendChild(micIco);
+
+  card.appendChild(video);
+  card.appendChild(avatarWrap);
+  card.appendChild(nameBar);
+  return card;
+}
+
+function removeCard(id) {
+  const card = document.getElementById('card-' + id);
+  if (card) card.remove();
+  updateGrid();
+}
+
+function updateLocalUI() {
+  const vid = document.querySelector('#card-local video');
+  const avatar = document.getElementById('avatar-local');
+  const micIco = document.getElementById('mic-icon-local');
+  if (!vid) return;
+  if (camOn) { vid.classList.remove('cam-off'); avatar.classList.remove('show'); }
+  else       { vid.classList.add('cam-off');    avatar.classList.add('show'); }
+  micIco.className = 'fa-solid mic-icon ' + (micOn ? 'fa-microphone active' : 'fa-microphone-slash muted');
+}
+
+function updateRemoteMicUI(peerId, muted) {
+  const ico = document.getElementById('mic-icon-' + peerId);
+  if (!ico) return;
+  ico.className = 'fa-solid mic-icon ' + (muted ? 'fa-microphone-slash muted' : 'fa-microphone active');
+}
+
+function updateRemoteCamUI(peerId, off) {
+  const vid    = document.querySelector('#card-' + peerId + ' video');
+  const avatar = document.getElementById('avatar-' + peerId);
+  if (!vid || !avatar) return;
+  if (off) { vid.classList.add('cam-off'); avatar.classList.add('show'); }
+  else     { vid.classList.remove('cam-off'); avatar.classList.remove('show'); }
+}
+
+// ═══════════════════════════════════════════════
+// WEBRTC CORE
+// ═══════════════════════════════════════════════
+function createPeer(peerId, isInitiator) {
+  if (peers[peerId]) {
+    peers[peerId].close();
+    delete peers[peerId];
+  }
+
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+  peers[peerId] = pc;
+
+  // Thêm track local
+  if (localStream) {
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  }
+
+  // Nhận stream remote
+  pc.ontrack = (e) => {
+    const stream = e.streams[0];
+    const existing = document.getElementById('card-' + peerId);
+    if (existing) {
+      existing.querySelector('video').srcObject = stream;
+    } else {
+      const name = peerNames[peerId] || 'Khách';
+      const card = makeCard(peerId, name, stream);
+      document.getElementById('videoGrid').appendChild(card);
+      updateGrid();
+      // Áp trạng thái mic/cam nếu đã biết
+      if (peerMediaState[peerId]) {
+        updateRemoteMicUI(peerId, peerMediaState[peerId].micMuted);
+        updateRemoteCamUI(peerId, peerMediaState[peerId].camOff);
+      }
+    }
+    // Đảm bảo video play (iOS)
+    const v = document.querySelector('#card-' + peerId + ' video');
+    if (v) v.play().catch(() => {});
+  };
+
+  // ICE candidate
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      socket.emit('ice-candidate', { to: peerId, candidate: e.candidate });
+    }
+  };
+
+  // Reconnect nếu mất kết nối
+  pc.oniceconnectionstatechange = () => {
+    const state = pc.iceConnectionState;
+    console.log(`ICE [${peerId}]:`, state);
+    if (state === 'failed') {
+      if (pc.restartIce) { pc.restartIce(); }
+    }
+    if (state === 'disconnected') {
+      // Thử lại sau 3s
+      setTimeout(() => {
+        if (peers[peerId] && peers[peerId].iceConnectionState === 'disconnected') {
+          renegotiate(peerId);
+        }
+      }, 3000);
+    }
+  };
+
+  // Tạo offer nếu là initiator
+  if (isInitiator) {
+    pc.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', { to: peerId, offer: pc.localDescription });
+      } catch (e) { console.error('Offer error:', e); }
     };
+  }
 
-    // Ràng buộc cho mobile đời thấp (độ phân giải thấp, fps vừa phải)
-    const VIDEO_CONSTRAINTS = {
-        width: { ideal: 480, max: 640 },
-        height: { ideal: 640, max: 720 },
-        frameRate: { ideal: 15, max: 20 }
-    };
+  return pc;
+}
 
-    let socket = null;
-    let localStream = null;          // local media stream
-    let currentVideoDeviceId = null; // để swap
-    let allVideoDevices = [];
+async function renegotiate(peerId) {
+  const pc = peers[peerId];
+  if (!pc) return;
+  try {
+    const offer = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(offer);
+    socket.emit('offer', { to: peerId, offer: pc.localDescription });
+  } catch(e) { console.error('Renegotiate error:', e); }
+}
 
-    // Map lưu peer connection và element remote
-    let peerConnections = new Map();   // key: socketId, value: RTCPeerConnection
-    let remoteVideoElements = new Map(); // key: socketId, value: <video> element
+// ═══════════════════════════════════════════════
+// SWAP CAMERA (tối ưu Android/iOS)
+// ═══════════════════════════════════════════════
+async function swapCamera() {
+  if (isSwapping) return;
+  isSwapping = true;
+  showToast('🔄 Đang đổi camera...');
+  try {
+    currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+    const newStream = await getMedia(currentFacing);
+    const newVideoTrack = newStream.getVideoTracks()[0];
 
-    let userId = null;
-    let isVideoEnabled = true;
-    let isAudioEnabled = true;
-    let localVideoElement = null;
+    // Thay track trong local video
+    const localVid = document.querySelector('#card-local video');
+    if (localVid) localVid.srcObject = newStream;
 
-    // DOM elements
-    const videoGrid = document.getElementById('videoGrid');
-    const toggleVideoBtn = document.getElementById('toggleVideoBtn');
-    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-    const swapCameraBtn = document.getElementById('swapCameraBtn');
-    const toastMsg = document.getElementById('toastMsg');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-
-    function showToast(text, isError = false) {
-        toastMsg.style.opacity = '1';
-        toastMsg.style.background = isError ? '#450a0a' : '#1e293b';
-        toastMsg.style.borderLeftColor = isError ? '#ef4444' : '#3b82f6';
-        toastMsg.innerText = text;
-        setTimeout(() => {
-            toastMsg.style.opacity = '0';
-        }, 2800);
+    // Thay track trong tất cả peer connection
+    const oldVideoTrack = localStream.getVideoTracks()[0];
+    for (const pc of Object.values(peers)) {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) {
+        await sender.replaceTrack(newVideoTrack);
+      }
     }
 
-    // =============== HÀM LẤY MEDIA (tối ưu mobile) ===============
-    async function getMediaWithDeviceId(videoDeviceId = null, audioEnable = true) {
-        const videoConstraints = videoDeviceId ? 
-            { deviceId: { exact: videoDeviceId }, ...VIDEO_CONSTRAINTS } : 
-            { ...VIDEO_CONSTRAINTS, facingMode: 'user' }; // fallback
+    // Dừng track cũ và cập nhật stream
+    if (oldVideoTrack) oldVideoTrack.stop();
+    localStream.removeTrack(oldVideoTrack);
+    localStream.addTrack(newVideoTrack);
 
-        const constraints = {
-            video: videoConstraints,
-            audio: audioEnable ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false
-        };
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            return stream;
-        } catch (err) {
-            console.error("getUserMedia error:", err);
-            throw err;
+    // Giữ audio track từ stream mới nếu audio track cũ bị mất
+    if (localStream.getAudioTracks().length === 0) {
+      const audioTrack = newStream.getAudioTracks()[0];
+      if (audioTrack) {
+        localStream.addTrack(audioTrack);
+        for (const pc of Object.values(peers)) {
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+          if (sender) await sender.replaceTrack(audioTrack);
         }
+      }
+    } else {
+      // Dừng audio track mới thừa
+      newStream.getAudioTracks().forEach(t => t.stop());
     }
 
-    // Liệt kê camera để swap
-    async function enumerateCameras() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter(device => device.kind === 'videoinput');
-        allVideoDevices = videoInputs;
-        return videoInputs;
-    }
+    showToast(currentFacing === 'user' ? '📸 Camera trước' : '📷 Camera sau');
+  } catch (e) {
+    currentFacing = currentFacing === 'user' ? 'environment' : 'user'; // rollback
+    showToast('⚠️ Không đổi được camera');
+    console.error(e);
+  }
+  isSwapping = false;
+}
 
-    // Thay đổi camera (swap) dùng replaceTrack (không renegotiate)
-    async function swapCamera() {
-        if (!localStream) {
-            showToast("Chưa có luồng video", true);
-            return;
-        }
-        await enumerateCameras();
-        if (allVideoDevices.length < 2) {
-            showToast("⚠️ Không tìm thấy camera thứ hai để đổi", true);
-            return;
-        }
-        // Lấy device hiện tại của video track
-        const oldVideoTrack = localStream.getVideoTracks()[0];
-        if (!oldVideoTrack) return;
-        const oldDeviceId = oldVideoTrack.getSettings().deviceId;
-        // Tìm camera khác với device id hiện tại
-        let nextDevice = allVideoDevices.find(device => device.deviceId !== oldDeviceId);
-        if (!nextDevice) nextDevice = allVideoDevices[0]; // fallback
-        const newDeviceId = nextDevice.deviceId;
+// ═══════════════════════════════════════════════
+// TOGGLE MIC / CAM
+// ═══════════════════════════════════════════════
+function toggleMic() {
+  micOn = !micOn;
+  localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  const btn = document.getElementById('btnMic');
+  btn.className = 'ctrl-btn ' + (micOn ? 'on' : 'off');
+  btn.innerHTML = `<i class="fa-solid fa-${micOn ? 'microphone' : 'microphone-slash'}"></i>`;
+  updateLocalUI();
+  socket.emit('media-state', { micMuted: !micOn, camOff: !camOn });
+}
 
-        showToast("🔄 Đang chuyển camera...");
-        let newVideoStream = null;
-        try {
-            // Chỉ lấy video track mới, giữ nguyên audio track cũ
-            newVideoStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: newDeviceId }, ...VIDEO_CONSTRAINTS },
-                audio: false
-            });
-            const newVideoTrack = newVideoStream.getVideoTracks()[0];
-            if (!newVideoTrack) throw new Error("Không lấy được video track mới");
+function toggleCam() {
+  camOn = !camOn;
+  localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  const btn = document.getElementById('btnCam');
+  btn.className = 'ctrl-btn ' + (camOn ? 'on' : 'off');
+  btn.innerHTML = `<i class="fa-solid fa-${camOn ? 'video' : 'video-slash'}"></i>`;
+  updateLocalUI();
+  socket.emit('media-state', { micMuted: !micOn, camOff: !camOn });
+}
 
-            // Thay thế track cho local stream
-            const oldVideoIdx = localStream.getVideoTracks().indexOf(oldVideoTrack);
-            if (oldVideoIdx !== -1) {
-                localStream.removeTrack(oldVideoTrack);
-                oldVideoTrack.stop();
-                localStream.addTrack(newVideoTrack);
-            } else {
-                // fallback: tạo lại stream
-                throw new Error("track not found");
-            }
+// ═══════════════════════════════════════════════
+// JOIN / LEAVE
+// ═══════════════════════════════════════════════
+async function joinMeeting() {
+  myName = document.getElementById('nameInput').value.trim() || 'Khách';
+  try {
+    localStream = await getMedia('user');
+  } catch(e) { return; }
 
-            // Cập nhật local video element
-            if (localVideoElement && localVideoElement.srcObject !== localStream) {
-                localVideoElement.srcObject = localStream;
-            }
+  // Hiện giao diện meeting
+  document.getElementById('lobby').style.display   = 'none';
+  document.getElementById('meeting').style.display = 'flex';
 
-            // Thay thế track cho tất cả các peer connection (video sender)
-            for (let [peerId, pc] of peerConnections.entries()) {
-                const senders = pc.getSenders();
-                const videoSender = senders.find(sender => sender.track && sender.track.kind === 'video');
-                if (videoSender) {
-                    try {
-                        await videoSender.replaceTrack(newVideoTrack);
-                    } catch (err) {
-                        console.warn(`replaceTrack error for ${peerId}:`, err);
-                    }
-                }
-            }
-            currentVideoDeviceId = newDeviceId;
-            showToast("✅ Đã đổi camera");
-        } catch (err) {
-            console.error("Swap camera error:", err);
-            showToast("Lỗi đổi camera, thử lại", true);
-            // rollback không cần
-        } finally {
-            if (newVideoStream) {
-                newVideoStream.getVideoTracks().forEach(t => { if (t !== localStream.getVideoTracks()[0]) t.stop(); });
-            }
-        }
-    }
+  // Thêm card local
+  const card = makeCard('local', myName, localStream, true);
+  document.getElementById('videoGrid').appendChild(card);
+  updateGrid();
 
-    // Bật tắt local video (enabled track)
-    function toggleLocalVideo() {
-        if (!localStream) return;
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-            isVideoEnabled = !isVideoEnabled;
-            videoTrack.enabled = isVideoEnabled;
-            toggleVideoBtn.classList.toggle('active', isVideoEnabled);
-            toggleVideoBtn.classList.toggle('danger', !isVideoEnabled);
-            // Gửi trạng thái để UI remote hiển thị (optional)
-            socket.emit('user-media-status', { videoEnabled: isVideoEnabled, audioEnabled: isAudioEnabled });
-            showToast(isVideoEnabled ? "Bật camera" : "Tắt camera");
-            updateLocalStatusIcon();
-        }
-    }
+  // Kết nối socket
+  socket = io();
 
-    function toggleLocalAudio() {
-        if (!localStream) return;
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-            isAudioEnabled = !isAudioEnabled;
-            audioTrack.enabled = isAudioEnabled;
-            toggleAudioBtn.classList.toggle('active', isAudioEnabled);
-            toggleAudioBtn.classList.toggle('danger', !isAudioEnabled);
-            socket.emit('user-media-status', { videoEnabled: isVideoEnabled, audioEnabled: isAudioEnabled });
-            showToast(isAudioEnabled ? "Bật micro" : "Tắt micro");
-            updateLocalStatusIcon();
-        }
-    }
-
-    function updateLocalStatusIcon() {
-        if (!localVideoElement) return;
-        const parentCard = localVideoElement.closest('.video-card');
-        if (!parentCard) return;
-        let statusDiv = parentCard.querySelector('.video-status');
-        if (!statusDiv) {
-            statusDiv = document.createElement('div');
-            statusDiv.className = 'video-status';
-            parentCard.appendChild(statusDiv);
-        }
-        statusDiv.innerHTML = `
-            <span class="mic-off-icon">${!isAudioEnabled ? '🔇' : '🎤'}</span>
-            <span class="cam-off-icon">${!isVideoEnabled ? '📷❌' : ''}</span>
-        `;
-        if(!isVideoEnabled) statusDiv.innerHTML += `<span class="off-badge">Cam tắt</span>`;
-    }
-
-    // Tạo video card
-    function createVideoCard(peerId, isLocal = false, name = "") {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.id = isLocal ? 'localVideoCard' : `remoteCard_${peerId}`;
-        const video = document.createElement('video');
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = isLocal; // local luôn muted để tránh hú
-        video.volume = 1;
-        const label = document.createElement('div');
-        label.className = 'video-label';
-        label.innerText = isLocal ? `👤 Bạn ${name ? `(${name})` : ''}` : `👥 Thành viên`;
-        const statusDiv = document.createElement('div');
-        statusDiv.className = 'video-status';
-        card.appendChild(video);
-        card.appendChild(label);
-        card.appendChild(statusDiv);
-        if (isLocal) {
-            localVideoElement = video;
-        } else {
-            remoteVideoElements.set(peerId, video);
-        }
-        return { card, video };
-    }
-
-    // Hiển thị local video
-    async function initLocalMedia() {
-        try {
-            const stream = await getMediaWithDeviceId(null, true);
-            localStream = stream;
-            isVideoEnabled = true;
-            isAudioEnabled = true;
-            // Xóa local card nếu có
-            const existingLocalCard = document.getElementById('localVideoCard');
-            if(existingLocalCard) existingLocalCard.remove();
-            const { card, video } = createVideoCard(null, true, "Bạn");
-            video.srcObject = localStream;
-            videoGrid.prepend(card);
-            updateLocalStatusIcon();
-            // Lấy danh sách camera
-            await enumerateCameras();
-            if (allVideoDevices.length > 0) currentVideoDeviceId = localStream.getVideoTracks()[0]?.getSettings().deviceId;
-            // set button state
-            toggleVideoBtn.classList.add('active');
-            toggleAudioBtn.classList.add('active');
-            toggleVideoBtn.classList.remove('danger');
-            toggleAudioBtn.classList.remove('danger');
-            showToast("✅ Camera và mic đã sẵn sàng");
-        } catch (err) {
-            console.error("Init media error:", err);
-            showToast("Không thể truy cập camera/micro, vui lòng cấp quyền", true);
-            // fallback: cho phép dùng nhưng không có stream
-            localStream = null;
-            const { card, video } = createVideoCard(null, true, "Bạn (ko cam)");
-            video.poster = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='gray'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14c-2.33 0-4.31-1.46-5.11-3.5h10.22c-.8 2.04-2.78 3.5-5.11 3.5z'/%3E%3C/svg%3E";
-            video.style.objectFit = "contain";
-            videoGrid.prepend(card);
-            localVideoElement = video;
-        } finally {
-            loadingOverlay.classList.add('hidden');
-        }
-    }
-
-    // =============== WEBRTC SIGNALING (Mesh) ===============
-    async function createPeerConnection(targetId, isInitiator = false) {
-        if (peerConnections.has(targetId)) {
-            return peerConnections.get(targetId);
-        }
-        const pc = new RTCPeerConnection(ICE_SERVERS);
-        peerConnections.set(targetId, pc);
-
-        // Thêm local tracks nếu có
-        if (localStream) {
-            localStream.getTracks().forEach(track => {
-                if (localStream.getTracks().includes(track)) {
-                    pc.addTrack(track, localStream);
-                }
-            });
-        }
-
-        // Xử lý ICE candidate
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', { target: targetId, candidate: event.candidate });
-            }
-        };
-
-        pc.ontrack = (event) => {
-            const remoteVideo = remoteVideoElements.get(targetId);
-            if (remoteVideo && !remoteVideo.srcObject) {
-                remoteVideo.srcObject = event.streams[0];
-            } else if (!remoteVideo) {
-                // Tạo card mới nếu chưa có
-                const { card, video } = createVideoCard(targetId, false);
-                video.srcObject = event.streams[0];
-                videoGrid.appendChild(card);
-                remoteVideoElements.set(targetId, video);
-                // Cập nhật nhãn
-                const label = card.querySelector('.video-label');
-                if (label) label.innerText = `🎥 Thành viên ${targetId.slice(0,5)}`;
-            } else {
-                remoteVideo.srcObject = event.streams[0];
-            }
-        };
-
-        pc.onconnectionstatechange = () => {
-            console.log(`Connection state with ${targetId}: ${pc.connectionState}`);
-            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                closePeerConnection(targetId);
-                showToast(`Mất kết nối với một người`, true);
-            }
-        };
-
-        if (isInitiator && localStream) {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit('offer', { target: targetId, offer: pc.localDescription });
-        }
-        return pc;
-    }
-
-    async function closePeerConnection(peerId) {
-        const pc = peerConnections.get(peerId);
-        if (pc) {
-            pc.close();
-            peerConnections.delete(peerId);
-        }
-        const videoEl = remoteVideoElements.get(peerId);
-        if (videoEl && videoEl.parentElement) {
-            videoEl.parentElement.remove();
-        }
-        remoteVideoElements.delete(peerId);
-    }
-
-    function closeAllConnections() {
-        for (let [peerId, pc] of peerConnections.entries()) {
-            pc.close();
-        }
-        peerConnections.clear();
-        remoteVideoElements.forEach((video, id) => {
-            if (video && video.parentElement) video.parentElement.remove();
-        });
-        remoteVideoElements.clear();
-    }
-
-    // Socket handlers
-    function setupSocketHandlers() {
-        socket.on('connect', () => {
-            userId = socket.id;
-            document.getElementById('roomBadge').innerText = `👥 Phòng chung · ID: ${userId.slice(0,6)}`;
-            socket.emit('join-room');
-        });
-
-        socket.on('existing-users', (users) => {
-            // users là danh sách các socket id (không bao gồm chính mình)
-            console.log("Existing users:", users);
-            for (let existingId of users) {
-                if (existingId !== socket.id) {
-                    createPeerConnection(existingId, true).catch(e => console.warn(e));
-                }
-            }
-        });
-
-        socket.on('user-joined', (newUserId) => {
-            if (newUserId === socket.id) return;
-            if (!peerConnections.has(newUserId)) {
-                createPeerConnection(newUserId, false).catch(e => console.warn(e));
-            }
-        });
-
-        socket.on('offer', async ({ from, offer }) => {
-            let pc = peerConnections.get(from);
-            if (!pc) {
-                pc = await createPeerConnection(from, false);
-            }
-            await pc.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            socket.emit('answer', { target: from, answer: pc.localDescription });
-        });
-
-        socket.on('answer', async ({ from, answer }) => {
-            const pc = peerConnections.get(from);
-            if (pc && pc.signalingState !== 'closed') {
-                await pc.setRemoteDescription(new RTCSessionDescription(answer));
-            }
-        });
-
-        socket.on('ice-candidate', async ({ from, candidate }) => {
-            const pc = peerConnections.get(from);
-            if (pc && candidate) {
-                try {
-                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                } catch (err) {
-                    console.warn("ICE candidate error:", err);
-                }
-            }
-        });
-
-        socket.on('user-left', (leftUserId) => {
-            closePeerConnection(leftUserId);
-            showToast(`Một người đã rời khỏi phòng`, false);
-        });
-
-        // Nhận trạng thái media (chỉ để cập nhật badge)
-        socket.on('peer-media-status', ({ userId: peerId, videoEnabled, audioEnabled }) => {
-            const videoCard = document.getElementById(`remoteCard_${peerId}`);
-            if (videoCard) {
-                let statusDiv = videoCard.querySelector('.video-status');
-                if (!statusDiv) {
-                    statusDiv = document.createElement('div');
-                    statusDiv.className = 'video-status';
-                    videoCard.appendChild(statusDiv);
-                }
-                statusDiv.innerHTML = `
-                    <span>${!audioEnabled ? '🔇' : '🎤'}</span>
-                    <span>${!videoEnabled ? '📵' : ''}</span>
-                `;
-            }
-        });
-    }
-
-    // Xử lý reconnect khi mất mạng
-    function initSocket() {
-        socket = io({
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000
-        });
-        setupSocketHandlers();
-        socket.on('disconnect', () => {
-            showToast("Mất kết nối server, đang thử lại...", true);
-            closeAllConnections();
-        });
-        socket.on('connect_error', () => {
-            showToast("Lỗi kết nối đến server, kiểm tra mạng", true);
-        });
-    }
-
-    // ============== MAIN ==============
-    window.addEventListener('load', async () => {
-        initSocket();
-        await initLocalMedia();
-
-        // Sự kiện nút
-        toggleVideoBtn.addEventListener('click', toggleLocalVideo);
-        toggleAudioBtn.addEventListener('click', toggleLocalAudio);
-        swapCameraBtn.addEventListener('click', swapCamera);
-
-        // Gửi định kỳ status khi thay đổi
-        setInterval(() => {
-            if (socket && socket.connected && localStream) {
-                socket.emit('user-media-status', { videoEnabled: isVideoEnabled, audioEnabled: isAudioEnabled });
-            }
-        }, 4000);
+  socket.on('existing-users', (users) => {
+    users.forEach(u => {
+      peerNames[u.id] = u.name;
+      createPeer(u.id, true);
     });
+  });
 
-    window.addEventListener('beforeunload', () => {
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-        }
-        if (socket) socket.disconnect();
-    });
+  socket.on('user-joined', (u) => {
+    peerNames[u.id] = u.name;
+    showToast(`👤 ${u.name} đã tham gia`);
+    // Không tạo peer ở đây — người mới sẽ tạo offer
+  });
+
+  socket.on('offer', async ({ from, offer }) => {
+    if (!peers[from]) createPeer(from, false);
+    const pc = peers[from];
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('answer', { to: from, answer: pc.localDescription });
+    } catch(e) { console.error('Answer error:', e); }
+  });
+
+  socket.on('answer', async ({ from, answer }) => {
+    const pc = peers[from];
+    if (!pc) return;
+    try {
+      if (pc.signalingState === 'have-local-offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    } catch(e) { console.error('Set answer error:', e); }
+  });
+
+  socket.on('ice-candidate', async ({ from, candidate }) => {
+    const pc = peers[from];
+    if (!pc) return;
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch(e) { /* bỏ qua candidate lỗi */ }
+  });
+
+  socket.on('user-media-state', ({ id, micMuted, camOff }) => {
+    peerMediaState[id] = { micMuted, camOff };
+    updateRemoteMicUI(id, micMuted);
+    updateRemoteCamUI(id, camOff);
+  });
+
+  socket.on('user-left', (id) => {
+    const name = peerNames[id] || 'Một người';
+    showToast(`👋 ${name} đã rời phòng`);
+    if (peers[id]) { peers[id].close(); delete peers[id]; }
+    delete peerNames[id];
+    delete peerMediaState[id];
+    removeCard(id);
+  });
+
+  socket.emit('join', { name: myName });
+
+  // Broadcast trạng thái hiện tại
+  socket.emit('media-state', { micMuted: false, camOff: false });
+}
+
+function leaveMeeting() {
+  if (socket) socket.disconnect();
+  localStream?.getTracks().forEach(t => t.stop());
+  Object.values(peers).forEach(pc => pc.close());
+  peers = {}; peerNames = {}; peerMediaState = {};
+  document.getElementById('videoGrid').innerHTML = '';
+  document.getElementById('meeting').style.display = 'none';
+  document.getElementById('lobby').style.display   = 'flex';
+  micOn = true; camOn = true; currentFacing = 'user';
+  document.getElementById('btnMic').className = 'ctrl-btn on';
+  document.getElementById('btnMic').innerHTML = '<i class="fa-solid fa-microphone"></i>';
+  document.getElementById('btnCam').className = 'ctrl-btn on';
+  document.getElementById('btnCam').innerHTML = '<i class="fa-solid fa-video"></i>';
+}
+
+// ═══════════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════════
+document.getElementById('joinBtn').onclick = joinMeeting;
+document.getElementById('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') joinMeeting(); });
+document.getElementById('btnMic').onclick  = toggleMic;
+document.getElementById('btnCam').onclick  = toggleCam;
+document.getElementById('btnSwap').onclick = swapCamera;
+document.getElementById('btnEnd').onclick  = leaveMeeting;
 </script>
 </body>
 </html>
