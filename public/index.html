@@ -80,7 +80,7 @@
     background: var(--bg);
   }
 
-  /* Grid video - Google Meet style */
+  /* Grid video */
   #videoGrid {
     flex: 1;
     overflow-y: auto;
@@ -92,7 +92,6 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Layout tự động theo số người */
   #videoGrid.count-1 { grid-template-columns: 1fr; }
   #videoGrid.count-2 { grid-template-columns: 1fr 1fr; }
   #videoGrid.count-3 { grid-template-columns: 1fr 1fr; }
@@ -107,7 +106,6 @@
     #videoGrid.count-many { grid-template-columns: 1fr 1fr; }
   }
 
-  /* Card video - giống Google Meet */
   .video-card {
     position: relative;
     background: var(--surface);
@@ -129,7 +127,6 @@
   }
   .video-card video.cam-off { display: none; }
 
-  /* Avatar khi tắt cam */
   .avatar-wrap {
     display: none;
     position: absolute;
@@ -154,7 +151,6 @@
     text-transform: uppercase;
   }
 
-  /* Tên + trạng thái */
   .name-bar {
     position: absolute;
     bottom: 0; left: 0; right: 0;
@@ -205,7 +201,13 @@
   .ctrl-btn.swap { background: var(--card); color: var(--accent); }
   .ctrl-btn.end  { background: var(--red);  color: #fff; }
 
-  /* ── Toast thông báo ── */
+  /* Ẩn nút swap trên desktop */
+  #btnSwap { display: none; }
+  @media (pointer: coarse) {
+    #btnSwap { display: flex; }
+  }
+
+  /* ── Toast ── */
   #toast {
     position: fixed;
     top: 16px; left: 50%;
@@ -223,7 +225,6 @@
   }
   #toast.show { transform: translateX(-50%) translateY(0); }
 
-  /* ── Chỉ số người ── */
   #peerCount {
     position: absolute;
     right: 16px;
@@ -237,7 +238,6 @@
   }
   #peerCount i { color: var(--green); font-size: .6rem; }
 
-  /* iOS safe area */
   @supports (padding-bottom: env(safe-area-inset-bottom)) {
     #controls { padding-bottom: calc(8px + env(safe-area-inset-bottom)); height: calc(var(--bar-h) + env(safe-area-inset-bottom)); }
   }
@@ -267,7 +267,6 @@
 
 <div id="toast"></div>
 
-<!-- Socket.IO -->
 <script src="/socket.io/socket.io.js"></script>
 <script>
 // ═══════════════════════════════════════════════
@@ -278,7 +277,6 @@ const ICE_SERVERS = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    // TURN miễn phí (tăng tỷ lệ kết nối qua NAT/mobile)
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
@@ -298,36 +296,35 @@ const ICE_SERVERS = {
 let socket;
 let localStream = null;
 let myName = '';
-let peers = {};          // peerId -> RTCPeerConnection
-let peerNames = {};      // peerId -> name
-let peerMediaState = {}; // peerId -> { mic, cam }
+let peers = {};
+let peerNames = {};
+let peerMediaState = {};
 let micOn = true;
 let camOn = true;
-let currentFacing = 'user'; // 'user' | 'environment'
+let currentFacing = 'user';
 let isSwapping = false;
 
 // ═══════════════════════════════════════════════
-// MEDIA
+// MEDIA — iOS 12 compatible
 // ═══════════════════════════════════════════════
-async function getMedia(facingMode = 'user') {
-  const constraints = {
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    },
-    video: {
-      facingMode,
-      width:  { ideal: 640, max: 1280 },
-      height: { ideal: 480, max: 720 },
-      frameRate: { ideal: 15, max: 30 }
-    }
-  };
-  // iOS 12 fallback
+async function getMedia(facingMode) {
+  // Thử với facingMode trước
+  if (facingMode) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 30 } }
+      });
+    } catch (e) { /* fallthrough */ }
+  }
+  // iOS 12 / thiết bị cũ: không dùng advanced constraints
   try {
-    return await navigator.mediaDevices.getUserMedia(constraints);
+    return await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: { width: { ideal: 640 }, height: { ideal: 480 } }
+    });
   } catch (e) {
-    // Thử lại không có facingMode nếu lỗi
+    // Thử tối giản nhất
     try {
       return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     } catch (e2) {
@@ -366,11 +363,11 @@ function makeCard(id, name, stream, isLocal = false) {
 
   const video = document.createElement('video');
   video.autoplay = true;
-  video.playsInline = true; // quan trọng cho iOS
-  video.muted = isLocal;    // local mute tránh echo
+  video.playsInline = true;
+  video.setAttribute('playsinline', ''); // iOS 12 cần attribute dạng string
+  video.muted = isLocal;
   if (stream) video.srcObject = stream;
 
-  // Avatar khi tắt cam
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar-wrap';
   avatarWrap.id = 'avatar-' + id;
@@ -380,7 +377,6 @@ function makeCard(id, name, stream, isLocal = false) {
   avatarCircle.textContent = (name || '?').charAt(0);
   avatarWrap.appendChild(avatarCircle);
 
-  // Thanh tên + mic
   const nameBar = document.createElement('div');
   nameBar.className = 'name-bar';
   const nameSpan = document.createElement('span');
@@ -439,12 +435,10 @@ function createPeer(peerId, isInitiator) {
   const pc = new RTCPeerConnection(ICE_SERVERS);
   peers[peerId] = pc;
 
-  // Thêm track local
   if (localStream) {
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   }
 
-  // Nhận stream remote
   pc.ontrack = (e) => {
     const stream = e.streams[0];
     const existing = document.getElementById('card-' + peerId);
@@ -455,33 +449,25 @@ function createPeer(peerId, isInitiator) {
       const card = makeCard(peerId, name, stream);
       document.getElementById('videoGrid').appendChild(card);
       updateGrid();
-      // Áp trạng thái mic/cam nếu đã biết
       if (peerMediaState[peerId]) {
         updateRemoteMicUI(peerId, peerMediaState[peerId].micMuted);
         updateRemoteCamUI(peerId, peerMediaState[peerId].camOff);
       }
     }
-    // Đảm bảo video play (iOS)
     const v = document.querySelector('#card-' + peerId + ' video');
     if (v) v.play().catch(() => {});
   };
 
-  // ICE candidate
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       socket.emit('ice-candidate', { to: peerId, candidate: e.candidate });
     }
   };
 
-  // Reconnect nếu mất kết nối
   pc.oniceconnectionstatechange = () => {
     const state = pc.iceConnectionState;
-    console.log(`ICE [${peerId}]:`, state);
-    if (state === 'failed') {
-      if (pc.restartIce) { pc.restartIce(); }
-    }
+    if (state === 'failed' && pc.restartIce) pc.restartIce();
     if (state === 'disconnected') {
-      // Thử lại sau 3s
       setTimeout(() => {
         if (peers[peerId] && peers[peerId].iceConnectionState === 'disconnected') {
           renegotiate(peerId);
@@ -490,7 +476,6 @@ function createPeer(peerId, isInitiator) {
     }
   };
 
-  // Tạo offer nếu là initiator
   if (isInitiator) {
     pc.onnegotiationneeded = async () => {
       try {
@@ -515,56 +500,69 @@ async function renegotiate(peerId) {
 }
 
 // ═══════════════════════════════════════════════
-// SWAP CAMERA (tối ưu Android/iOS)
+// SWAP CAMERA — Android dùng applyConstraints,
+//               iOS dùng stream mới
 // ═══════════════════════════════════════════════
 async function swapCamera() {
   if (isSwapping) return;
   isSwapping = true;
   showToast('🔄 Đang đổi camera...');
+
+  const nextFacing = currentFacing === 'user' ? 'environment' : 'user';
+
   try {
-    currentFacing = currentFacing === 'user' ? 'environment' : 'user';
-    const newStream = await getMedia(currentFacing);
-    const newVideoTrack = newStream.getVideoTracks()[0];
+    const videoTrack = localStream.getVideoTracks()[0];
 
-    // Thay track trong local video
-    const localVid = document.querySelector('#card-local video');
-    if (localVid) localVid.srcObject = newStream;
-
-    // Thay track trong tất cả peer connection
-    const oldVideoTrack = localStream.getVideoTracks()[0];
-    for (const pc of Object.values(peers)) {
-      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-      if (sender) {
-        await sender.replaceTrack(newVideoTrack);
-      }
-    }
-
-    // Dừng track cũ và cập nhật stream
-    if (oldVideoTrack) oldVideoTrack.stop();
-    localStream.removeTrack(oldVideoTrack);
-    localStream.addTrack(newVideoTrack);
-
-    // Giữ audio track từ stream mới nếu audio track cũ bị mất
-    if (localStream.getAudioTracks().length === 0) {
-      const audioTrack = newStream.getAudioTracks()[0];
-      if (audioTrack) {
-        localStream.addTrack(audioTrack);
-        for (const pc of Object.values(peers)) {
-          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
-          if (sender) await sender.replaceTrack(audioTrack);
+    // ── Thử applyConstraints trước (Android Chrome, Firefox Android) ──
+    let swapped = false;
+    if (videoTrack && typeof videoTrack.applyConstraints === 'function') {
+      try {
+        await videoTrack.applyConstraints({ facingMode: { exact: nextFacing } });
+        swapped = true;
+      } catch (e) {
+        // exact không được → thử ideal
+        try {
+          await videoTrack.applyConstraints({ facingMode: nextFacing });
+          swapped = true;
+        } catch (e2) {
+          swapped = false; // sẽ dùng stream mới bên dưới
         }
       }
-    } else {
-      // Dừng audio track mới thừa
-      newStream.getAudioTracks().forEach(t => t.stop());
     }
 
+    if (!swapped) {
+      // ── Fallback: tạo stream mới (iOS Safari, thiết bị cũ) ──
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: nextFacing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
+        audio: false
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+
+      // Thay track trong tất cả peer connection
+      for (const pc of Object.values(peers)) {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) await sender.replaceTrack(newVideoTrack);
+      }
+
+      // Cập nhật localStream
+      if (videoTrack) {
+        localStream.removeTrack(videoTrack);
+        videoTrack.stop();
+      }
+      localStream.addTrack(newVideoTrack);
+
+      // Cập nhật video element local
+      const localVid = document.querySelector('#card-local video');
+      if (localVid) localVid.srcObject = localStream;
+    }
+
+    currentFacing = nextFacing;
     showToast(currentFacing === 'user' ? '📸 Camera trước' : '📷 Camera sau');
   } catch (e) {
-    currentFacing = currentFacing === 'user' ? 'environment' : 'user'; // rollback
     showToast('⚠️ Không đổi được camera');
-    console.error(e);
+    console.error('swapCamera error:', e);
   }
+
   isSwapping = false;
 }
 
@@ -600,16 +598,17 @@ async function joinMeeting() {
     localStream = await getMedia('user');
   } catch(e) { return; }
 
-  // Hiện giao diện meeting
   document.getElementById('lobby').style.display   = 'none';
   document.getElementById('meeting').style.display = 'flex';
 
-  // Thêm card local
   const card = makeCard('local', myName, localStream, true);
   document.getElementById('videoGrid').appendChild(card);
   updateGrid();
 
-  // Kết nối socket
+  // Đảm bảo video local play trên iOS
+  const localVid = card.querySelector('video');
+  localVid.play().catch(() => {});
+
   socket = io();
 
   socket.on('existing-users', (users) => {
@@ -622,7 +621,6 @@ async function joinMeeting() {
   socket.on('user-joined', (u) => {
     peerNames[u.id] = u.name;
     showToast(`👤 ${u.name} đã tham gia`);
-    // Không tạo peer ở đây — người mới sẽ tạo offer
   });
 
   socket.on('offer', async ({ from, offer }) => {
@@ -651,7 +649,7 @@ async function joinMeeting() {
     if (!pc) return;
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch(e) { /* bỏ qua candidate lỗi */ }
+    } catch(e) { /* ignore */ }
   });
 
   socket.on('user-media-state', ({ id, micMuted, camOff }) => {
@@ -670,8 +668,6 @@ async function joinMeeting() {
   });
 
   socket.emit('join', { name: myName });
-
-  // Broadcast trạng thái hiện tại
   socket.emit('media-state', { micMuted: false, camOff: false });
 }
 
