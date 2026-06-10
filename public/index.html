@@ -2,75 +2,99 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebRTC Multi-User</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>WebRTC Room</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+      :root {
+        --bg: #0f0f1a;
+        --surface: #1a1a2e;
+        --border: #2a2a4a;
+        --purple: #a78bfa;
+        --green: #6ee7b7;
+        --red: #fca5a5;
+        --gray: #6b7280;
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-top: env(safe-area-inset-top, 0px);
+      }
+
+      html, body {
+        height: 100%;
+        background: var(--bg);
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+        /* Prevent iOS bounce scroll */
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
       }
 
       body {
-        background: #0f0f1a;
-        color: #fff;
-        font-family: "Segoe UI", sans-serif;
-        min-height: 100vh;
         display: flex;
         flex-direction: column;
+        height: 100dvh; /* dynamic viewport height for mobile */
+        padding-top: var(--safe-top);
       }
 
+      /* ── Header ── */
       header {
-        background: #1a1a2e;
-        padding: 14px 24px;
+        background: var(--surface);
+        padding: 10px 16px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid #2a2a4a;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        z-index: 10;
       }
 
-      header h1 {
-        font-size: 1.1rem;
-        color: #a78bfa;
-        letter-spacing: 1px;
-      }
+      header h1 { font-size: 1rem; color: var(--purple); letter-spacing: 1px; }
 
       #status {
-        font-size: 0.8rem;
-        color: #6ee7b7;
+        font-size: 0.75rem;
+        color: var(--green);
         background: #064e3b22;
         border: 1px solid #6ee7b744;
-        padding: 4px 12px;
+        padding: 3px 10px;
         border-radius: 99px;
+        transition: all .3s;
       }
+      #status.error { color: var(--red); border-color: #fca5a544; }
 
-      #status.error {
-        color: #fca5a5;
-        border-color: #fca5a544;
-      }
-
-      /* Grid video */
+      /* ── Grid ── */
       #video-grid {
         flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         display: grid;
-        gap: 10px;
-        padding: 16px;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 8px;
+        padding: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
         align-content: start;
       }
 
-      .video-wrapper {
-        position: relative;
-        background: #1a1a2e;
-        border-radius: 12px;
-        overflow: hidden;
-        aspect-ratio: 16/9;
-        border: 1px solid #2a2a4a;
-        transition: border-color 0.3s;
+      /* Mobile: portrait 1 cột, landscape 2 cột */
+      @media (max-width: 540px) {
+        #video-grid { grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; }
+      }
+      @media (max-width: 360px) {
+        #video-grid { grid-template-columns: 1fr; }
       }
 
-      .video-wrapper.speaking {
-        border-color: #a78bfa;
+      /* ── Video wrapper ── */
+      .video-wrapper {
+        position: relative;
+        background: var(--surface);
+        border-radius: 10px;
+        overflow: hidden;
+        aspect-ratio: 4/3;
+        border: 1.5px solid var(--border);
+        transition: border-color .3s;
+        cursor: pointer;
       }
 
       .video-wrapper video {
@@ -79,142 +103,131 @@
         object-fit: cover;
         display: block;
         background: #000;
+        /* iOS hardware accel */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        /* Mirror local */
+      }
+
+      .video-wrapper.local video {
+        -webkit-transform: scaleX(-1) translateZ(0);
+        transform: scaleX(-1) translateZ(0);
       }
 
       .video-wrapper .label {
         position: absolute;
-        bottom: 8px;
-        left: 10px;
-        font-size: 0.72rem;
-        background: #0008;
+        bottom: 6px; left: 8px;
+        font-size: 0.68rem;
+        background: #0009;
         padding: 2px 8px;
         border-radius: 6px;
-        color: #e2e8f0;
         pointer-events: none;
-        max-width: 80%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        max-width: 75%;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
 
-      .video-wrapper .cam-off-overlay {
+      /* Mic mute badge */
+      .video-wrapper .mic-badge {
         position: absolute;
-        inset: 0;
+        bottom: 6px; right: 8px;
+        background: #0009;
+        border-radius: 6px;
+        padding: 2px 5px;
+        font-size: 0.7rem;
         display: none;
-        align-items: center;
-        justify-content: center;
-        background: #1a1a2e;
-        flex-direction: column;
-        gap: 8px;
-        color: #6b7280;
-        font-size: 0.85rem;
+        pointer-events: none;
       }
+      .video-wrapper.mic-off .mic-badge { display: block; }
 
-      .video-wrapper .cam-off-overlay svg {
-        width: 48px;
-        height: 48px;
-        opacity: 0.4;
+      /* Cam off overlay */
+      .cam-off-overlay {
+        position: absolute; inset: 0;
+        display: none;
+        align-items: center; justify-content: center;
+        background: var(--surface);
+        flex-direction: column; gap: 6px;
+        color: var(--gray); font-size: 0.78rem;
       }
+      .cam-off-overlay svg { width: 40px; height: 40px; opacity: .35; }
+      .video-wrapper.cam-off .cam-off-overlay { display: flex; }
 
-      .video-wrapper.cam-off .cam-off-overlay {
-        display: flex;
-      }
-
-      /* Controls */
+      /* ── Controls ── */
       #controls {
-        background: #1a1a2e;
-        border-top: 1px solid #2a2a4a;
-        padding: 14px 24px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 10px 16px;
+        padding-bottom: calc(10px + var(--safe-bottom));
         display: flex;
         justify-content: center;
-        gap: 16px;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
         flex-wrap: wrap;
       }
 
       .btn {
         display: flex;
         align-items: center;
-        gap: 7px;
-        padding: 10px 20px;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 16px;
         border-radius: 99px;
         border: none;
         cursor: pointer;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
         font-weight: 600;
-        transition: all 0.2s;
-        outline: none;
+        transition: all .15s;
+        /* iOS tap fix */
+        -webkit-appearance: none;
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+        min-width: 56px;
+        min-height: 44px; /* iOS tap target */
       }
 
-      .btn svg {
-        width: 18px;
-        height: 18px;
-        flex-shrink: 0;
-      }
+      .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
-      .btn-cam {
-        background: #312e81;
-        color: #c4b5fd;
-        border: 1px solid #4c1d95;
-      }
+      /* Cam */
+      .btn-cam { background: #312e81; color: #c4b5fd; border: 1px solid #4c1d95; }
+      .btn-cam:active { background: #4338ca; }
+      .btn-cam.off { background: #1f2937; color: var(--gray); border-color: #374151; }
 
-      .btn-cam:hover {
-        background: #3730a3;
-      }
+      /* Mic */
+      .btn-mic { background: #064e3b; color: var(--green); border: 1px solid #065f46; }
+      .btn-mic:active { background: #065f46; }
+      .btn-mic.off { background: #1f2937; color: var(--gray); border-color: #374151; }
 
-      .btn-cam.off {
-        background: #1f2937;
-        color: #6b7280;
-        border-color: #374151;
-      }
-
-      .btn-mic {
-        background: #064e3b;
-        color: #6ee7b7;
-        border: 1px solid #065f46;
-      }
-
-      .btn-mic:hover {
-        background: #065f46;
-      }
-
-      .btn-mic.off {
-        background: #1f2937;
-        color: #6b7280;
-        border-color: #374151;
-      }
-
-      /* Swap cam button — chỉ hiện trên mobile có nhiều camera */
-      .btn-swap {
-        background: #1e3a5f;
-        color: #93c5fd;
-        border: 1px solid #1d4ed8;
-        display: none; /* ẩn mặc định, JS bật nếu có camera sau/trước */
-      }
-
-      .btn-swap:hover {
-        background: #1e40af;
-      }
-
-      .btn-swap.swapping svg {
-        animation: spin 0.4s linear;
-      }
-
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
+      /* Swap */
+      .btn-swap { background: #1e3a5f; color: #93c5fd; border: 1px solid #1d4ed8; }
+      .btn-swap:active { background: #1d4ed8; transform: rotate(180deg); }
+      /* Hide swap on desktop (no mobile camera) */
+      @media (hover: hover) and (pointer: fine) {
+        .btn-swap { display: none; }
       }
 
       #peer-count {
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         color: #94a3b8;
-        align-self: center;
+        min-width: 60px;
+        text-align: center;
       }
 
-      /* Responsive: 1 người full, 2 người 2 cột, nhiều hơn auto */
-      @media (max-width: 500px) {
-        #video-grid {
-          grid-template-columns: 1fr;
-        }
+      /* Spinner khi đang swap */
+      .btn-swap.swapping svg {
+        animation: spin .5s linear;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Fullscreen khi tap vào video */
+      .video-wrapper.fullscreen-active {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        border-radius: 0;
+        aspect-ratio: unset;
+        width: 100vw;
+        height: 100dvh;
       }
     </style>
   </head>
@@ -231,7 +244,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
         </svg>
-        Camera
+        Cam
       </button>
 
       <button class="btn btn-mic" id="btn-mic" onclick="toggleMic()">
@@ -239,342 +252,455 @@
           <path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/>
           <path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/>
         </svg>
-        Micro
+        Mic
       </button>
 
-      <!-- Nút swap camera — JS sẽ show nếu thiết bị có nhiều camera -->
-      <button class="btn btn-swap" id="btn-swap" onclick="swapCam()" title="Đổi camera">
+      <button class="btn btn-swap" id="btn-swap" onclick="swapCam()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
-          <circle cx="12" cy="12" r="2"/>
-          <path d="M7 3l-3 4M17 3l3 4"/>
+          <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
         Đổi cam
       </button>
 
-      <span id="peer-count">👥 1 người</span>
+      <span id="peer-count">👥 1</span>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-      // ─── Config ───────────────────────────────────────────────
-      const ICE_SERVERS = {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-        ],
-      };
+    // ══════════════════════════════════════════════
+    //  CONFIG
+    // ══════════════════════════════════════════════
+    const ICE_SERVERS = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+      ],
+      iceCandidatePoolSize: 10,
+    };
 
-      // ─── State ────────────────────────────────────────────────
-      const peers = new Map();   // peerId -> RTCPeerConnection
-      const iceBuf = new Map();  // peerId -> [candidates]
-      let localStream = null;
-      let camOn = true;
-      let micOn = true;
-      let myId = null;
+    // ══════════════════════════════════════════════
+    //  STATE
+    // ══════════════════════════════════════════════
+    const peers  = new Map();  // peerId -> RTCPeerConnection
+    const iceBuf = new Map();  // peerId -> [candidate]
+    let localStream  = null;
+    let camOn   = true;
+    let micOn   = true;
+    let facingMode = "user";   // "user" | "environment"
+    let isSwapping = false;
+    let myId    = null;
 
-      // Swap cam state
-      let currentFacingMode = "user";          // "user" = trước, "environment" = sau
-      let availableCameras = [];               // danh sách deviceId camera
-      let currentCamIndex = 0;                 // index trong availableCameras
+    const grid       = document.getElementById("video-grid");
+    const statusEl   = document.getElementById("status");
+    const peerCount  = document.getElementById("peer-count");
 
-      const grid = document.getElementById("video-grid");
-      const statusEl = document.getElementById("status");
-      const peerCount = document.getElementById("peer-count");
+    // ══════════════════════════════════════════════
+    //  SOCKET
+    // ══════════════════════════════════════════════
+    const socket = io({ transports: ["websocket"] });
 
-      // ─── Socket ───────────────────────────────────────────────
-      const socket = io();
+    socket.on("connect", () => {
+      myId = socket.id;
+      setStatus("Đã kết nối", false);
+      startMedia();
+    });
 
-      socket.on("connect", () => {
-        myId = socket.id;
-        setStatus("Đã kết nối", false);
-        startMedia();
-      });
+    socket.on("disconnect", () => setStatus("Mất kết nối", true));
 
-      socket.on("disconnect", () => setStatus("Mất kết nối", true));
+    socket.on("existing-users", async (userIds) => {
+      for (const uid of userIds) await createOffer(uid);
+      updateCount();
+    });
 
-      socket.on("existing-users", async (userIds) => {
-        for (const uid of userIds) await createOffer(uid);
-        updateCount();
-      });
+    socket.on("user-joined", ({ userId }) => updateCount());
 
-      socket.on("user-joined", ({ userId }) => {
-        updateCount();
-      });
-
-      socket.on("offer", async ({ from, offer }) => {
-        const pc = getOrCreatePC(from);
+    socket.on("offer", async ({ from, offer }) => {
+      const pc = getOrCreatePC(from);
+      if (pc.signalingState !== "stable") {
+        await Promise.all([
+          pc.setLocalDescription({ type: "rollback" }),
+          pc.setRemoteDescription(new RTCSessionDescription(offer)),
+        ]).catch(() => pc.setRemoteDescription(new RTCSessionDescription(offer)));
+      } else {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        await flushIceBuf(from);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("answer", { to: from, answer });
-      });
+      }
+      await flushIceBuf(from);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit("answer", { to: from, answer });
+    });
 
-      socket.on("answer", async ({ from, answer }) => {
-        const pc = peers.get(from);
-        if (!pc) return;
-        if (pc.signalingState === "have-local-offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          await flushIceBuf(from);
-        }
-      });
+    socket.on("answer", async ({ from, answer }) => {
+      const pc = peers.get(from);
+      if (!pc || pc.signalingState !== "have-local-offer") return;
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushIceBuf(from);
+    });
 
-      socket.on("ice-candidate", async ({ from, candidate }) => {
-        const pc = peers.get(from);
-        if (!pc) return;
-        if (pc.remoteDescription && pc.remoteDescription.type) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
-          catch (e) { console.warn("addIceCandidate error:", e); }
-        } else {
-          if (!iceBuf.has(from)) iceBuf.set(from, []);
-          iceBuf.get(from).push(candidate);
-        }
-      });
+    socket.on("ice-candidate", async ({ from, candidate }) => {
+      const pc = peers.get(from);
+      if (!pc) return;
+      if (pc.remoteDescription?.type) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+      } else {
+        if (!iceBuf.has(from)) iceBuf.set(from, []);
+        iceBuf.get(from).push(candidate);
+      }
+    });
 
-      socket.on("user-left", ({ userId }) => {
-        closePeer(userId);
-        updateCount();
-      });
+    socket.on("user-left", ({ userId }) => {
+      closePeer(userId);
+      updateCount();
+    });
 
-      // ─── Media ────────────────────────────────────────────────
-      async function startMedia() {
+    // ══════════════════════════════════════════════
+    //  MEDIA
+    // ══════════════════════════════════════════════
+    async function startMedia() {
+      try {
+        localStream = await getStream(facingMode);
+      } catch (e) {
+        console.warn("getUserMedia failed:", e);
+        // Thử lại không có video (audio only)
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: true,
-          });
-        } catch (e) {
-          console.warn("Không lấy được media:", e);
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch {
           localStream = new MediaStream();
         }
-        addVideoEl("local", localStream, "Bạn", true);
-        await detectCameras();
-        socket.emit("join");
       }
+      addVideoEl("local", localStream, "Bạn", true);
+      socket.emit("join");
+    }
 
-      // Kiểm tra thiết bị có nhiều camera không -> show nút swap
-      async function detectCameras() {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          availableCameras = devices.filter(d => d.kind === "videoinput");
-          const btnSwap = document.getElementById("btn-swap");
-          if (availableCameras.length > 1) {
-            btnSwap.style.display = "flex";
-          }
-        } catch (e) {
-          console.warn("enumerateDevices error:", e);
-        }
-      }
+    async function getStream(facing) {
+      // iOS Safari cần exact facingMode
+      const videoConstraints = {
+        facingMode: { ideal: facing },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      return navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+    }
 
-      // ─── Swap Camera ──────────────────────────────────────────
-      async function swapCam() {
-        if (!localStream) return;
+    // ══════════════════════════════════════════════
+    //  SWAP CAM
+    // ══════════════════════════════════════════════
+    async function swapCam() {
+      if (isSwapping || !localStream) return;
+      isSwapping = true;
 
-        const btnSwap = document.getElementById("btn-swap");
-        btnSwap.classList.add("swapping");
-        btnSwap.disabled = true;
+      const btn = document.getElementById("btn-swap");
+      btn.classList.add("swapping");
 
-        try {
-          // Đổi facingMode
-          currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+      const newFacing = facingMode === "user" ? "environment" : "user";
 
-          // Lấy stream mới với camera đã đổi
-          const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false, // giữ audio track cũ
-          });
+      try {
+        // 1. Stop tracks cũ
+        localStream.getVideoTracks().forEach(t => t.stop());
 
-          const newVideoTrack = newStream.getVideoTracks()[0];
-          const oldVideoTrack = localStream.getVideoTracks()[0];
+        // 2. Lấy stream mới
+        const newStream = await getStream(newFacing);
+        facingMode = newFacing;
 
-          // Cập nhật video element local
-          const videoEl = document.getElementById("video-local");
-          if (videoEl) {
-            // Tạo stream preview mới cho video local (giữ audio track cũ)
-            const previewStream = new MediaStream([
-              newVideoTrack,
-              ...localStream.getAudioTracks(),
-            ]);
-            videoEl.srcObject = previewStream;
-          }
+        // 3. Thay video track trong localStream
+        const oldAudioTracks = localStream.getAudioTracks();
+        const newVideoTrack  = newStream.getVideoTracks()[0];
 
-          // Thay track trong localStream
-          if (oldVideoTrack) {
-            localStream.removeTrack(oldVideoTrack);
-            oldVideoTrack.stop();
-          }
+        // Xoá video cũ, thêm video mới vào localStream hiện có
+        localStream.getVideoTracks().forEach(t => localStream.removeTrack(t));
+        if (newVideoTrack) {
           localStream.addTrack(newVideoTrack);
-
-          // Replace track trong tất cả RTCPeerConnection đang có
-          for (const [, pc] of peers) {
-            const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-            if (sender) {
-              await sender.replaceTrack(newVideoTrack);
-            }
-          }
-
-          // Cập nhật trạng thái cam-off nếu cam đang tắt
-          if (!camOn) {
-            newVideoTrack.enabled = false;
-          }
-
-        } catch (e) {
-          console.error("Swap cam error:", e);
-          // Nếu lỗi (vd: không có camera sau), quay lại facingMode cũ
-          currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
-          setStatus("Không thể đổi camera", true);
-          setTimeout(() => setStatus("Đã kết nối", false), 2000);
-        } finally {
-          setTimeout(() => {
-            btnSwap.classList.remove("swapping");
-            btnSwap.disabled = false;
-          }, 400);
+          newVideoTrack.enabled = camOn;
         }
+
+        // Nếu stream mới có audio nhưng localStream chưa có → thêm vào
+        if (oldAudioTracks.length === 0) {
+          newStream.getAudioTracks().forEach(t => {
+            t.enabled = micOn;
+            localStream.addTrack(t);
+          });
+        } else {
+          // Dừng audio dư thừa từ newStream
+          newStream.getAudioTracks().forEach(t => t.stop());
+        }
+
+        // 4. Cập nhật video element local (mirror chỉ khi front cam)
+        const localVideo = document.getElementById("video-local");
+        const localWrapper = document.getElementById("wrapper-local");
+        if (localVideo) localVideo.srcObject = localStream;
+        if (localWrapper) {
+          localWrapper.classList.toggle("local", facingMode === "user");
+        }
+
+        // 5. Replace track trên tất cả RTCPeerConnection
+        const replacements = [];
+        peers.forEach((pc) => {
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track?.kind === "video");
+          if (videoSender && newVideoTrack) {
+            replacements.push(videoSender.replaceTrack(newVideoTrack));
+          }
+        });
+        await Promise.all(replacements);
+
+      } catch (e) {
+        console.error("swapCam error:", e);
+        // Fallback: thử lại với facing cũ
+        try {
+          const fallback = await getStream(facingMode);
+          const vt = fallback.getVideoTracks()[0];
+          localStream.getVideoTracks().forEach(t => localStream.removeTrack(t));
+          if (vt) { localStream.addTrack(vt); vt.enabled = camOn; }
+          peers.forEach(pc => {
+            const s = pc.getSenders().find(s => s.track?.kind === "video");
+            if (s && vt) s.replaceTrack(vt);
+          });
+        } catch {}
+      } finally {
+        isSwapping = false;
+        btn.classList.remove("swapping");
+      }
+    }
+
+    // ══════════════════════════════════════════════
+    //  PEER CONNECTION
+    // ══════════════════════════════════════════════
+    function getOrCreatePC(peerId) {
+      if (peers.has(peerId)) return peers.get(peerId);
+
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      peers.set(peerId, pc);
+      iceBuf.set(peerId, []);
+
+      // Thêm local tracks
+      if (localStream) {
+        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
       }
 
-      // ─── RTCPeerConnection factory ────────────────────────────
-      function getOrCreatePC(peerId) {
-        if (peers.has(peerId)) return peers.get(peerId);
+      pc.ontrack = ({ streams }) => {
+        const stream = streams[0];
+        if (!stream) return;
+        const el = document.getElementById(`video-${peerId}`);
+        if (el) { el.srcObject = stream; }
+        else { addVideoEl(peerId, stream, shortId(peerId), false); }
+        updateCount();
+      };
 
-        const pc = new RTCPeerConnection(ICE_SERVERS);
-        peers.set(peerId, pc);
-        iceBuf.set(peerId, []);
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit("ice-candidate", { to: peerId, candidate });
+      };
 
-        if (localStream) {
-          localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+      pc.onconnectionstatechange = () => {
+        console.log(`[${shortId(peerId)}] conn:`, pc.connectionState);
+        if (pc.connectionState === "failed") {
+          pc.restartIce();
         }
-
-        pc.ontrack = ({ streams }) => {
-          const stream = streams[0];
-          if (!stream) return;
-          const existing = document.getElementById(`video-${peerId}`);
-          if (existing) {
-            existing.srcObject = stream;
-          } else {
-            addVideoEl(peerId, stream, shortId(peerId), false);
-          }
+        if (["disconnected", "closed", "failed"].includes(pc.connectionState)) {
+          closePeer(peerId);
           updateCount();
-        };
+        }
+      };
 
-        pc.onicecandidate = ({ candidate }) => {
-          if (candidate) socket.emit("ice-candidate", { to: peerId, candidate });
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "failed") pc.restartIce();
-          if (["disconnected", "closed", "failed"].includes(pc.connectionState)) {
-            closePeer(peerId);
-            updateCount();
-          }
-        };
-
-        return pc;
-      }
-
-      async function createOffer(peerId) {
-        const pc = getOrCreatePC(peerId);
+      // iOS Safari cần onnegotiationneeded để renegotiate sau swap
+      pc.onnegotiationneeded = async () => {
+        // Chỉ renegotiate nếu đang stable (tránh loop)
+        if (pc.signalingState !== "stable") return;
         try {
           const offer = await pc.createOffer();
+          if (pc.signalingState !== "stable") return;
           await pc.setLocalDescription(offer);
-          socket.emit("offer", { to: peerId, offer });
+          socket.emit("offer", { to: peerId, offer: pc.localDescription });
         } catch (e) {
-          console.error("createOffer error:", e);
+          console.warn("onnegotiationneeded error:", e);
         }
-      }
+      };
 
-      async function flushIceBuf(peerId) {
-        const buf = iceBuf.get(peerId) || [];
-        const pc = peers.get(peerId);
-        if (!pc) return;
-        for (const c of buf) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
-          catch (e) { console.warn("flush ICE error:", e); }
+      return pc;
+    }
+
+    async function createOffer(peerId) {
+      const pc = getOrCreatePC(peerId);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("offer", { to: peerId, offer: pc.localDescription });
+      } catch (e) {
+        console.error("createOffer:", e);
+      }
+    }
+
+    async function flushIceBuf(peerId) {
+      const buf = iceBuf.get(peerId) || [];
+      const pc  = peers.get(peerId);
+      if (!pc) return;
+      for (const c of buf) {
+        await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+      }
+      iceBuf.set(peerId, []);
+    }
+
+    function closePeer(peerId) {
+      peers.get(peerId)?.close();
+      peers.delete(peerId);
+      iceBuf.delete(peerId);
+      document.getElementById(`wrapper-${peerId}`)?.remove();
+    }
+
+    // ══════════════════════════════════════════════
+    //  DOM VIDEO
+    // ══════════════════════════════════════════════
+    function addVideoEl(id, stream, label, muted) {
+      if (document.getElementById(`wrapper-${id}`)) return;
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "video-wrapper" + (id === "local" ? " local" : "");
+      wrapper.id = `wrapper-${id}`;
+
+      const video = document.createElement("video");
+      video.id = `video-${id}`;
+      video.autoplay = true;
+      video.playsInline = true;   // QUAN TRỌNG cho iOS
+      video.muted = muted;
+      video.setAttribute("playsinline", "");         // iOS Safari cần attribute string
+      video.setAttribute("webkit-playsinline", "");  // iOS cũ
+      video.srcObject = stream;
+
+      // iOS: cần user gesture để play, dùng sự kiện loadedmetadata
+      video.addEventListener("loadedmetadata", () => {
+        video.play().catch(() => {});
+      });
+
+      const lbl = document.createElement("div");
+      lbl.className = "label";
+      lbl.textContent = label;
+
+      const micBadge = document.createElement("div");
+      micBadge.className = "mic-badge";
+      micBadge.textContent = "🔇";
+
+      const overlay = document.createElement("div");
+      overlay.className = "cam-off-overlay";
+      overlay.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+          <line x1="3" y1="3" x2="21" y2="21"/>
+        </svg>
+        <span>Cam tắt</span>`;
+
+      wrapper.appendChild(video);
+      wrapper.appendChild(lbl);
+      wrapper.appendChild(micBadge);
+      wrapper.appendChild(overlay);
+      grid.appendChild(wrapper);
+
+      // Tap để fullscreen (mobile)
+      wrapper.addEventListener("click", () => toggleFullscreen(wrapper, video));
+    }
+
+    // ══════════════════════════════════════════════
+    //  FULLSCREEN (tap video)
+    // ══════════════════════════════════════════════
+    let fsActive = null;
+    function toggleFullscreen(wrapper, video) {
+      // Native fullscreen nếu được hỗ trợ
+      if (document.fullscreenEnabled && !isMobile()) {
+        if (!document.fullscreenElement) {
+          wrapper.requestFullscreen?.();
+        } else {
+          document.exitFullscreen?.();
         }
-        iceBuf.set(peerId, []);
+        return;
       }
-
-      function closePeer(peerId) {
-        const pc = peers.get(peerId);
-        if (pc) { pc.close(); peers.delete(peerId); iceBuf.delete(peerId); }
-        const el = document.getElementById(`wrapper-${peerId}`);
-        if (el) el.remove();
+      // Mobile: CSS fullscreen
+      if (fsActive && fsActive !== wrapper) {
+        fsActive.classList.remove("fullscreen-active");
       }
-
-      // ─── Video DOM ────────────────────────────────────────────
-      function addVideoEl(id, stream, label, muted) {
-        if (document.getElementById(`wrapper-${id}`)) return;
-
-        const wrapper = document.createElement("div");
-        wrapper.className = "video-wrapper";
-        wrapper.id = `wrapper-${id}`;
-
-        const video = document.createElement("video");
-        video.id = `video-${id}`;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = muted;
-        video.srcObject = stream;
-
-        const lbl = document.createElement("div");
-        lbl.className = "label";
-        lbl.textContent = label;
-
-        const overlay = document.createElement("div");
-        overlay.className = "cam-off-overlay";
-        overlay.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-            <line x1="3" y1="3" x2="21" y2="21"/>
-          </svg>
-          <span>Cam tắt</span>`;
-
-        wrapper.appendChild(video);
-        wrapper.appendChild(lbl);
-        wrapper.appendChild(overlay);
-        grid.appendChild(wrapper);
+      if (wrapper.classList.toggle("fullscreen-active")) {
+        fsActive = wrapper;
+      } else {
+        fsActive = null;
       }
+    }
 
-      // ─── Controls ─────────────────────────────────────────────
-      function toggleCam() {
-        if (!localStream) return;
-        camOn = !camOn;
-        localStream.getVideoTracks().forEach((t) => (t.enabled = camOn));
-        const btn = document.getElementById("btn-cam");
-        const wrapper = document.getElementById("wrapper-local");
-        btn.classList.toggle("off", !camOn);
-        if (wrapper) wrapper.classList.toggle("cam-off", !camOn);
-        btn.innerHTML = camOn
-          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg> Camera`
-          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg> Camera`;
-      }
+    // ══════════════════════════════════════════════
+    //  CONTROLS
+    // ══════════════════════════════════════════════
+    function toggleCam() {
+      if (!localStream) return;
+      camOn = !camOn;
+      localStream.getVideoTracks().forEach(t => t.enabled = camOn);
 
-      function toggleMic() {
-        if (!localStream) return;
-        micOn = !micOn;
-        localStream.getAudioTracks().forEach((t) => (t.enabled = micOn));
-        const btn = document.getElementById("btn-mic");
-        btn.classList.toggle("off", !micOn);
-        btn.innerHTML = micOn
-          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg> Micro`
-          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><line x1="3" y1="3" x2="21" y2="21"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg> Micro`;
-      }
+      document.getElementById("btn-cam").classList.toggle("off", !camOn);
+      document.getElementById("wrapper-local")?.classList.toggle("cam-off", !camOn);
 
-      // ─── Helpers ──────────────────────────────────────────────
-      function setStatus(msg, isErr) {
-        statusEl.textContent = msg;
-        statusEl.className = isErr ? "error" : "";
-      }
+      updateBtnIcon("btn-cam", camOn,
+        // on icon
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>Cam`,
+        // off icon
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.369A1 1 0 0121 8.566v6.868a1 1 0 01-1.447.895L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg>Cam`
+      );
+    }
 
-      function updateCount() {
-        const n = peers.size + 1;
-        peerCount.textContent = `👥 ${n} người`;
-      }
+    function toggleMic() {
+      if (!localStream) return;
+      micOn = !micOn;
+      localStream.getAudioTracks().forEach(t => t.enabled = micOn);
 
-      function shortId(id) {
-        return "User-" + id.slice(0, 4).toUpperCase();
-      }
+      document.getElementById("btn-mic").classList.toggle("off", !micOn);
+      document.getElementById("wrapper-local")?.classList.toggle("mic-off", !micOn);
+
+      updateBtnIcon("btn-mic", micOn,
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg>Mic`,
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z"/><line x1="3" y1="3" x2="21" y2="21"/><path d="M19 10a7 7 0 01-14 0M12 19v4M8 23h8"/></svg>Mic`
+      );
+    }
+
+    function updateBtnIcon(id, isOn, onHTML, offHTML) {
+      const btn = document.getElementById(id);
+      if (btn) btn.innerHTML = isOn ? onHTML : offHTML;
+    }
+
+    // ══════════════════════════════════════════════
+    //  HELPERS
+    // ══════════════════════════════════════════════
+    function setStatus(msg, isErr) {
+      statusEl.textContent = msg;
+      statusEl.className = isErr ? "error" : "";
+    }
+
+    function updateCount() {
+      peerCount.textContent = `👥 ${peers.size + 1}`;
+    }
+
+    function shortId(id) {
+      return "U-" + id.slice(0, 4).toUpperCase();
+    }
+
+    function isMobile() {
+      return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    }
+
+    // iOS: wake lock workaround (giữ màn hình sáng)
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          await navigator.wakeLock.request("screen");
+        }
+      } catch {}
+    }
+    requestWakeLock();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    });
     </script>
   </body>
 </html>
