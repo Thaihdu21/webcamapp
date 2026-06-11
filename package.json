@@ -1,6 +1,7 @@
 {
   "name": "webrtc-meet",
   "version": "1.0.0",
+  "description": "Multi-user WebRTC video chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
