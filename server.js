@@ -1,40 +1,67 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
 const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server, {
-    cors: { origin: "*" }
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' },
+  transports: ['websocket', 'polling']
 });
 
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Lưu trữ danh sách user đang online
-let activeUsers = {};
+// Track all connected users
+const users = {}; // socketId -> { id, name }
 
 io.on('connection', (socket) => {
-    console.log(`User kết nối: ${socket.id}`);
+  console.log('[+] Connected:', socket.id);
 
-    // Gửi danh sách các user hiện tại cho user mới (loại trừ chính họ)
-    socket.emit('all-users', Object.keys(activeUsers));
-    activeUsers[socket.id] = true;
+  // New user joins — send them existing users, tell others about new user
+  socket.on('join', (data) => {
+    users[socket.id] = { id: socket.id, name: data.name || 'Guest' };
 
-    // Chuyển tiếp tín hiệu WebRTC (Offer, Answer, ICE Candidate)
-    socket.on('relay-sdp', ({ peerId, sdp }) => {
-        io.to(peerId).emit('sdp', { peerId: socket.id, sdp });
+    // Send the new user the full list of existing peers
+    const existingUsers = Object.values(users).filter(u => u.id !== socket.id);
+    socket.emit('existing-users', existingUsers);
+
+    // Tell all existing users about the new joiner
+    socket.broadcast.emit('user-joined', { id: socket.id, name: users[socket.id].name });
+
+    console.log(`Users online: ${Object.keys(users).length}`);
+  });
+
+  // Relay WebRTC signaling between peers
+  socket.on('offer', ({ to, offer }) => {
+    io.to(to).emit('offer', { from: socket.id, offer });
+  });
+
+  socket.on('answer', ({ to, answer }) => {
+    io.to(to).emit('answer', { from: socket.id, answer });
+  });
+
+  socket.on('ice-candidate', ({ to, candidate }) => {
+    io.to(to).emit('ice-candidate', { from: socket.id, candidate });
+  });
+
+  // Relay media state (mic/cam toggle)
+  socket.on('media-state', ({ video, audio }) => {
+    socket.broadcast.emit('peer-media-state', {
+      id: socket.id,
+      video,
+      audio
     });
+  });
 
-    socket.on('relay-ice', ({ peerId, iceCandidate }) => {
-        io.to(peerId).emit('ice', { peerId: socket.id, iceCandidate });
-    });
-
-    // Xử lý khi user ngắt kết nối
-    socket.on('disconnect', () => {
-        console.log(`User ngắt kết nối: ${socket.id}`);
-        delete activeUsers[socket.id];
-        socket.broadcast.emit('user-disconnected', socket.id);
-    });
+  socket.on('disconnect', () => {
+    console.log('[-] Disconnected:', socket.id);
+    delete users[socket.id];
+    io.emit('user-left', { id: socket.id });
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
