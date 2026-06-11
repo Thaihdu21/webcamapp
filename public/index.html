@@ -8,201 +8,438 @@
 <title>WebRTC Meet</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#202124;--surface:#3c4043;--surface2:#2d2e31;
-  --bar:#1e1f22;--accent:#8ab4f8;--danger:#f28b82;
-  --text:#e8eaed;--dim:#9aa0a6;--bar-h:72px;--gap:4px;
-}
-html,body{
-  height:100%;background:var(--bg);color:var(--text);
-  font-family:'Segoe UI',Roboto,Arial,sans-serif;
-  overflow:hidden;-webkit-tap-highlight-color:transparent;
-  -webkit-user-select:none;user-select:none;
-}
+/* ═══════════════════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── LOBBY ── */
-#lobby{display:flex;flex-direction:column;align-items:center;
-  justify-content:center;height:100%;gap:18px;padding:28px;}
-#lobby h1{font-size:1.5rem;font-weight:700;}
-#lobby p{color:var(--dim);font-size:.88rem;text-align:center;}
-#name-input{
-  width:100%;max-width:300px;padding:13px 16px;
-  border-radius:8px;border:2px solid var(--surface);
-  background:var(--surface2);color:var(--text);font-size:1rem;
-  outline:none;-webkit-appearance:none;
-}
-#name-input:focus{border-color:var(--accent);}
-#join-btn{
-  width:100%;max-width:300px;padding:13px;
-  background:var(--accent);color:#202124;font-size:1rem;
-  font-weight:700;border:none;border-radius:8px;cursor:pointer;
+:root {
+  --bg:       #111213;
+  --surface:  #2a2b2e;
+  --surface2: #1e1f22;
+  --bar:      #17181a;
+  --accent:   #4f9cf9;
+  --danger:   #e84c3d;
+  --mic-off:  #e84c3d;
+  --text:     #e8eaed;
+  --dim:      #8a8f9a;
+  --bar-h:    76px;
+  --gap:      6px;
+  --radius:   14px;
+  --tile-shadow: 0 2px 16px rgba(0,0,0,.55);
 }
 
-/* ── ROOM ── */
-#room{display:none;flex-direction:column;height:100%;}
-
-/* ── VIDEO GRID ── */
-#video-grid{
-  flex:1;display:grid;gap:var(--gap);padding:var(--gap);
-  background:var(--bg);overflow:hidden;
-  align-items:stretch;
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-/*
-  GOOGLE MEET GRID LOGIC:
-  1 người  → 1 cột, căn giữa, giới hạn size
-  2 người  → 2 cột bằng nhau, full height
-  3 người  → hàng 1: 2 ô, hàng 2: 1 ô giữa (50% width)
-  4 người  → 2x2
-  5 người  → hàng 1: 3 ô, hàng 2: 2 ô giữa
-  6 người  → 3x2
-  7-9      → 3x3
-*/
-
-/* 1 */
-.g1{
-  grid-template-columns:1fr;
-  grid-template-rows:1fr;
-  justify-items:center;align-items:center;
-}
-.g1 .tile{
-  width:100%;
-  max-width:calc((100vh - var(--bar-h) - 8px) * 16 / 9);
-  max-height:calc(100vh - var(--bar-h) - 8px);
+/* ═══════════════════════════════════════════
+   LOBBY
+═══════════════════════════════════════════ */
+#lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  padding: 32px 24px;
+  background: radial-gradient(ellipse at 50% 0%, #1a2540 0%, var(--bg) 65%);
 }
 
-/* 2 */
-.g2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;}
-
-/* 3 — 2 trên 1 dưới giữa */
-.g3{
-  grid-template-columns:1fr 1fr;
-  grid-template-rows:1fr 1fr;
-}
-.g3 .tile:nth-child(3){
-  grid-column:1/3;
-  justify-self:center;
-  width:50%;
+.lobby-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f9cf9 0%, #2563eb 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 0 32px rgba(79,156,249,.35);
+  margin-bottom: 4px;
 }
 
-/* 4 */
-.g4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
-
-/* 5 — hàng 1: 3, hàng 2: 2 giữa */
-.g5{
-  grid-template-columns:1fr 1fr 1fr;
-  grid-template-rows:1fr 1fr;
+#lobby h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -.5px;
+  color: #fff;
 }
-.g5 .tile:nth-child(4){grid-column:1/2;justify-self:end;width:100%;}
-.g5 .tile:nth-child(5){grid-column:3/4;justify-self:start;width:100%;}
 
-/* 6 */
-.g6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
+#lobby p {
+  color: var(--dim);
+  font-size: .88rem;
+  text-align: center;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+#name-input {
+  width: 100%;
+  max-width: 320px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  -webkit-appearance: none;
+  backdrop-filter: blur(8px);
+  transition: border-color .2s, box-shadow .2s;
+  margin-top: 8px;
+}
+#name-input::placeholder { color: var(--dim); }
+#name-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,156,249,.18);
+}
+
+#join-btn {
+  width: 100%;
+  max-width: 320px;
+  padding: 14px;
+  background: linear-gradient(135deg, #4f9cf9 0%, #2563eb 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  letter-spacing: .3px;
+  box-shadow: 0 4px 18px rgba(37,99,235,.4);
+  transition: opacity .15s, transform .1s;
+}
+#join-btn:active { opacity: .85; transform: scale(.98); }
+
+/* ═══════════════════════════════════════════
+   ROOM WRAPPER
+═══════════════════════════════════════════ */
+#room {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* ═══════════════════════════════════════════
+   VIDEO GRID
+═══════════════════════════════════════════ */
+#video-grid {
+  flex: 1;
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  overflow: hidden;
+  min-height: 0;
+  align-items: stretch;
+}
+
+/* ── Grid classes ── */
+/* 1 người: căn giữa, giới hạn 16:9 */
+.g1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  justify-items: center;
+  align-items: center;
+}
+.g1 .tile {
+  width: 100%;
+  max-width: min(100%, calc((100svh - var(--bar-h) - 20px) * 16 / 9));
+  max-height: calc(100svh - var(--bar-h) - 20px);
+}
+
+/* 2 người */
+.g2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+
+/* 3 người: 2 trên – 1 dưới giữa */
+.g3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.g3 .tile:nth-child(3) {
+  grid-column: 1 / 3;
+  justify-self: center;
+  width: 50%;
+}
+
+/* 4 người: 2×2 */
+.g4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+/* 5 người: hàng 1 ba ô, hàng 2 hai ô giữa */
+.g5 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.g5 .tile:nth-child(4) { grid-column: 1 / 2; justify-self: end;   width: 100%; }
+.g5 .tile:nth-child(5) { grid-column: 3 / 4; justify-self: start; width: 100%; }
+
+/* 6 người: 3×2 */
+.g6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
 
 /* 7+ */
-.gmany{grid-template-columns:1fr 1fr 1fr;}
+.gmany { grid-template-columns: repeat(3, 1fr); }
 
-/* ── TILE ── */
-.tile{
-  position:relative;background:#1a1b1e;border-radius:10px;
-  overflow:hidden;aspect-ratio:16/9;
-  min-height:0;min-width:0;
-}
-.tile video{
-  position:absolute;inset:0;
-  width:100%;height:100%;
-  object-fit:cover;display:block;
-  background:#000;
-  -webkit-playsinline:true;
-}
-/* gradient bar bottom */
-.tile-bar{
-  position:absolute;bottom:0;left:0;right:0;
-  padding:24px 8px 6px;
-  background:linear-gradient(transparent,rgba(0,0,0,.6));
-  display:flex;align-items:center;justify-content:space-between;
-  pointer-events:none;z-index:2;
-}
-.tile-name{
-  color:#fff;font-size:.75rem;font-weight:500;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  display:flex;align-items:center;gap:4px;max-width:85%;
-}
-.tile-mic-off{
-  width:22px;height:22px;border-radius:50%;
-  background:rgba(242,139,130,.9);color:#fff;
-  display:none;align-items:center;justify-content:center;
-  font-size:.58rem;flex-shrink:0;
-}
-.tile-mic-off.show{display:flex;}
+/* ═══════════════════════════════════════════
+   TILE — Google Meet style
+═══════════════════════════════════════════ */
+.tile {
+  position: relative;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  min-width: 0; min-height: 0;
+  box-shadow: var(--tile-shadow);
 
-/* cam-off avatar */
-.tile-avatar{
-  position:absolute;inset:0;z-index:1;
-  display:none;flex-direction:column;
-  align-items:center;justify-content:center;
-  background:#1a1b1e;gap:8px;pointer-events:none;
-}
-.tile-avatar.show{display:flex;}
-.av-circle{
-  width:56px;height:56px;border-radius:50%;
-  background:var(--surface);
-  display:flex;align-items:center;justify-content:center;
-  font-size:1.4rem;color:var(--dim);
-}
-.av-name{color:var(--dim);font-size:.8rem;}
+  /* Subtle border */
+  outline: 1.5px solid rgba(255,255,255,.07);
+  outline-offset: -1px;
 
-/* ── BOTTOM BAR ── */
-#bar{
-  height:var(--bar-h);background:var(--bar);
-  display:flex;align-items:center;justify-content:center;
-  gap:10px;padding:0 16px;flex-shrink:0;
-  border-top:1px solid rgba(255,255,255,.07);
-}
-.btn{
-  width:50px;height:50px;border-radius:50%;border:none;
-  background:var(--surface);color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  font-size:1.05rem;transition:background .15s,transform .1s;
-  -webkit-tap-highlight-color:transparent;flex-shrink:0;
-}
-.btn:active{transform:scale(.9);}
-.btn.off{background:var(--danger);}
-.btn.end{background:#d93025;width:58px;}
-#badge{
-  background:var(--surface);color:var(--dim);
-  padding:5px 12px;border-radius:20px;
-  font-size:.78rem;display:flex;align-items:center;gap:5px;
+  /* Smooth appear */
+  animation: tileIn .25s ease;
 }
 
-/* Ẩn swap cam trên desktop, chỉ hiện trên thiết bị có nhiều camera (mobile) */
-#btn-swap{display:none;}
-.is-mobile #btn-swap{display:flex;}
-
-/* ── TOAST ── */
-#toast{
-  position:fixed;
-  bottom:calc(var(--bar-h) + 10px);
-  left:50%;transform:translateX(-50%);
-  background:rgba(60,64,67,.95);color:var(--text);
-  padding:8px 16px;border-radius:8px;font-size:.82rem;
-  pointer-events:none;opacity:0;transition:opacity .3s;
-  white-space:nowrap;z-index:999;
+@keyframes tileIn {
+  from { opacity: 0; transform: scale(.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
-#toast.show{opacity:1;}
 
-/* ── RESPONSIVE ── */
-@media(max-width:600px) and (orientation:portrait){
-  .g3 .tile:nth-child(3){width:60%;}
-  .g5,.g6,.gmany{grid-template-columns:1fr 1fr;}
-  .btn{width:44px;height:44px;font-size:.95rem;}
-  .btn.end{width:50px;}
-  #bar{gap:8px;}
+/* Video fills the tile */
+.tile video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+  border-radius: var(--radius);
+  -webkit-playsinline: true;
 }
-@media(max-width:380px){
-  #bar{gap:6px;padding:0 8px;}
-  .btn{width:40px;height:40px;font-size:.88rem;}
+
+/* ── Bottom gradient bar ── */
+.tile-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 28px 10px 8px;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,.72) 0%,
+    rgba(0,0,0,.3)  50%,
+    transparent     100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.tile-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0,0,0,.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 85%;
+  background: rgba(0,0,0,.28);
+  padding: 3px 8px 3px 6px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+.tile-name i { font-size: .6rem; opacity: .75; }
+
+/* Mic-off badge (top-right) */
+.tile-mic-off {
+  position: absolute;
+  top: 8px; right: 8px;
+  z-index: 3;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: rgba(232,76,61,.9);
+  color: #fff;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: .58rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  backdrop-filter: blur(4px);
+}
+.tile-mic-off.show { display: flex; }
+
+/* Cam-off avatar */
+.tile-avatar {
+  position: absolute;
+  inset: 0; z-index: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--surface2);
+  pointer-events: none;
+}
+.tile-avatar.show { display: flex; }
+
+.av-circle {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3c4043 0%, #2a2b2e 100%);
+  border: 2px solid rgba(255,255,255,.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--dim);
+}
+.av-name {
+  color: var(--dim);
+  font-size: .8rem;
+  font-weight: 500;
+}
+
+/* Local tile: mirror front camera */
+#tile-local video { transform: scaleX(-1); }
+
+/* ═══════════════════════════════════════════
+   BOTTOM CONTROL BAR
+═══════════════════════════════════════════ */
+#bar {
+  height: var(--bar-h);
+  background: var(--bar);
+  border-top: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+/* Control buttons */
+.btn {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  position: relative;
+  transition: background .15s, transform .12s, box-shadow .15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:hover { background: #3a3b3f; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.btn:active { transform: scale(.88); }
+
+/* Muted state */
+.btn.off {
+  background: var(--danger);
+  box-shadow: 0 2px 12px rgba(232,76,61,.45);
+}
+.btn.off:hover { background: #c0392b; }
+
+/* End call */
+.btn.end {
+  width: 60px;
+  background: var(--danger);
+  box-shadow: 0 2px 14px rgba(232,76,61,.5);
+}
+.btn.end:hover { background: #c0392b; }
+
+/* Participant badge */
+#badge {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--dim);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: .78rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(4px);
+}
+#badge i { color: var(--accent); }
+
+/* Swap: chỉ hiện trên mobile */
+#btn-swap { display: none; }
+.is-mobile #btn-swap { display: flex; }
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+#toast {
+  position: fixed;
+  bottom: calc(var(--bar-h) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(40,41,45,.96);
+  border: 1px solid rgba(255,255,255,.1);
+  color: #fff;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: .82rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .28s;
+  white-space: nowrap;
+  z-index: 999;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+#toast.show { opacity: 1; }
+
+/* ═══════════════════════════════════════════
+   MOBILE RESPONSIVE
+═══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  :root { --gap: 4px; --radius: 10px; --bar-h: 68px; }
+
+  /* Portrait: tối đa 2 cột */
+  .g3 .tile:nth-child(3) { width: 65%; }
+  .g5, .g6, .gmany { grid-template-columns: 1fr 1fr; }
+
+  .btn { width: 46px; height: 46px; font-size: .95rem; }
+  .btn.end { width: 54px; }
+  #bar { gap: 8px; }
+
+  /* Ẩn badge text trên màn nhỏ, chỉ giữ icon + số */
+  #badge { padding: 5px 10px; font-size: .74rem; }
+}
+
+@media (max-width: 380px) {
+  :root { --bar-h: 62px; }
+  #bar { gap: 6px; padding: 0 8px; }
+  .btn { width: 42px; height: 42px; font-size: .88rem; }
+  .btn.end { width: 48px; }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --bar-h: 56px; }
+  .btn { width: 40px; height: 40px; font-size: .85rem; }
+  .btn.end { width: 48px; }
+  #bar { gap: 8px; }
+  .g1 .tile {
+    max-height: calc(100svh - var(--bar-h) - 10px);
+  }
+}
+
+/* PC: tile hover effect */
+@media (hover: hover) {
+  .tile:hover .tile-bar { opacity: 1; }
 }
 </style>
 </head>
@@ -210,20 +447,21 @@ html,body{
 
 <!-- LOBBY -->
 <div id="lobby">
-  <h1>🎥 WebRTC Meet</h1>
-  <p>Nhập tên rồi vào — không cần mã phòng</p>
+  <div class="lobby-icon"><i class="fas fa-video"></i></div>
+  <h1>WebRTC Meet</h1>
+  <p>Nhập tên và tham gia — không cần mã phòng</p>
   <input id="name-input" type="text" placeholder="Tên của bạn..." maxlength="24" autocomplete="off" />
-  <button id="join-btn"><i class="fas fa-video"></i>&nbsp; Tham gia</button>
+  <button id="join-btn"><i class="fas fa-sign-in-alt"></i>&nbsp; Tham gia ngay</button>
 </div>
 
 <!-- ROOM -->
 <div id="room">
   <div id="video-grid" class="g1"></div>
   <div id="bar">
-    <button class="btn" id="btn-mic" title="Mic"><i class="fas fa-microphone"></i></button>
-    <button class="btn" id="btn-cam" title="Camera"><i class="fas fa-video"></i></button>
-    <button class="btn" id="btn-swap" title="Đổi camera"><i class="fas fa-sync-alt"></i></button>
-    <button class="btn end" id="btn-end" title="Rời phòng"><i class="fas fa-phone-slash"></i></button>
+    <button class="btn" id="btn-mic"><i class="fas fa-microphone"></i></button>
+    <button class="btn" id="btn-cam"><i class="fas fa-video"></i></button>
+    <button class="btn" id="btn-swap"><i class="fas fa-sync-alt"></i></button>
+    <button class="btn end" id="btn-end"><i class="fas fa-phone-slash"></i></button>
     <div id="badge"><i class="fas fa-users"></i><span id="cnt">1</span></div>
   </div>
 </div>
@@ -231,369 +469,404 @@ html,body{
 <div id="toast"></div>
 
 <script>
-/* ── DETECT MOBILE để hiện nút swap ── */
+/* ── DETECT MOBILE ── */
 (function(){
-  var ua=navigator.userAgent||'';
-  var isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-  if(isMobile)document.body.classList.add('is-mobile');
-  /* iOS 12 bổ sung: kiểm tra enumerateDevices để detect có nhiều camera không */
-  if(isMobile&&navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){
-    navigator.mediaDevices.enumerateDevices().then(function(devices){
-      var cams=devices.filter(function(d){return d.kind==='videoinput';});
-      /* chỉ hiện swap nếu có >= 2 camera */
-      if(cams.length<2)document.getElementById('btn-swap').style.display='none';
+  var ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua))
+    document.body.classList.add('is-mobile');
+  /* Ẩn swap nếu chỉ có 1 camera */
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    navigator.mediaDevices.enumerateDevices().then(function(devs){
+      var cams = devs.filter(function(d){ return d.kind === 'videoinput'; });
+      if (cams.length < 2)
+        document.getElementById('btn-swap').style.display = 'none';
     }).catch(function(){});
   }
 })();
 
 /* ── LOAD SOCKET.IO ── */
 (function(){
-  var s=document.createElement('script');
-  s.src='/socket.io/socket.io.js';
-  s.onload=init;
-  s.onerror=function(){showToast('Lỗi tải socket.io');};
+  var s = document.createElement('script');
+  s.src = '/socket.io/socket.io.js';
+  s.onload = init;
+  s.onerror = function(){ showToast('Lỗi tải socket.io'); };
   document.head.appendChild(s);
 })();
 
 /* ── STATE ── */
-var socket,myId,myName='Guest';
-var localStream=null;
-var micOn=true,camOn=true,facing='user',swapping=false;
-var peers={};
+var socket, myId, myName = 'Guest';
+var localStream = null;
+var micOn = true, camOn = true, facing = 'user', swapping = false;
+var peers = {};
 
-var ICE_CFG={
-  iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
+var ICE_CFG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject', credential: 'openrelayproject' }
   ],
-  iceCandidatePoolSize:8
+  iceCandidatePoolSize: 8
 };
 
 /* ── TOAST ── */
 var _tt;
-function showToast(msg,dur){
-  var el=document.getElementById('toast');
-  el.textContent=msg;el.classList.add('show');
-  clearTimeout(_tt);_tt=setTimeout(function(){el.classList.remove('show');},dur||2500);
+function showToast(msg, dur) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(function(){ el.classList.remove('show'); }, dur || 2500);
 }
 
 /* ── GRID ── */
-function updateGrid(){
-  var g=document.getElementById('video-grid');
-  var n=g.children.length;
-  g.className=
-    n<=1?'g1':n===2?'g2':n===3?'g3':
-    n===4?'g4':n===5?'g5':n===6?'g6':'gmany';
+function updateGrid() {
+  var g = document.getElementById('video-grid');
+  var n = g.children.length;
+  g.className =
+    n <= 1 ? 'g1' : n === 2 ? 'g2' : n === 3 ? 'g3' :
+    n === 4 ? 'g4' : n === 5 ? 'g5' : n === 6 ? 'g6' : 'gmany';
 }
 
 /* ── HELPERS ── */
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function safePlay(v){var p=v.play();if(p&&p.catch)p.catch(function(){});}
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function safePlay(v) {
+  var p = v.play();
+  if (p && p.catch) p.catch(function(){});
+}
 
 /* ── TILE ── */
-function makeTile(id,name,stream,isLocal){
-  var tile=document.createElement('div');
-  tile.className='tile';tile.id='tile-'+id;
+function makeTile(id, name, stream, isLocal) {
+  var tile = document.createElement('div');
+  tile.className = 'tile';
+  tile.id = 'tile-' + id;
 
-  var video=document.createElement('video');
-  video.autoplay=true;
-  video.setAttribute('playsinline','');
-  video.setAttribute('webkit-playsinline','');
-  video.muted=!!isLocal;
-  if(stream){video.srcObject=stream;safePlay(video);}
+  var video = document.createElement('video');
+  video.autoplay = true;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.muted = !!isLocal;
+  if (stream) { video.srcObject = stream; safePlay(video); }
 
-  var avatar=document.createElement('div');
-  avatar.className='tile-avatar';
-  avatar.innerHTML='<div class="av-circle"><i class="fas fa-user"></i></div>'
-    +'<div class="av-name">'+esc(name)+'</div>';
+  var avatar = document.createElement('div');
+  avatar.className = 'tile-avatar';
+  avatar.innerHTML =
+    '<div class="av-circle"><i class="fas fa-user"></i></div>' +
+    '<div class="av-name">' + esc(name) + '</div>';
 
-  var bar=document.createElement('div');
-  bar.className='tile-bar';
+  var micBadge = document.createElement('div');
+  micBadge.className = 'tile-mic-off';
+  micBadge.innerHTML = '<i class="fas fa-microphone-slash"></i>';
 
-  var nameEl=document.createElement('div');
-  nameEl.className='tile-name';
-  nameEl.innerHTML='<i class="fas fa-user" style="font-size:.6rem;opacity:.7"></i> '
-    +esc(name)+(isLocal?' <span style="opacity:.6">(Bạn)</span>':'');
+  var bar = document.createElement('div');
+  bar.className = 'tile-bar';
 
-  var micBadge=document.createElement('div');
-  micBadge.className='tile-mic-off';
-  micBadge.innerHTML='<i class="fas fa-microphone-slash"></i>';
+  var nameEl = document.createElement('div');
+  nameEl.className = 'tile-name';
+  nameEl.innerHTML =
+    '<i class="fas fa-user"></i>' + esc(name) +
+    (isLocal ? ' <span style="opacity:.55;font-size:.7rem">(Bạn)</span>' : '');
 
-  bar.appendChild(nameEl);bar.appendChild(micBadge);
-  tile.append(video,avatar,bar);
+  bar.appendChild(nameEl);
+  tile.append(video, avatar, micBadge, bar);
   document.getElementById('video-grid').appendChild(tile);
   updateGrid();
 }
 
-function removeTile(id){
-  var t=document.getElementById('tile-'+id);
-  if(t)t.remove();
+function removeTile(id) {
+  var t = document.getElementById('tile-' + id);
+  if (t) t.remove();
   updateGrid();
 }
 
-function setTileMic(id,on){
-  var t=document.getElementById('tile-'+id);if(!t)return;
-  var b=t.querySelector('.tile-mic-off');
-  if(b)b.classList.toggle('show',!on);
+function setTileMic(id, on) {
+  var t = document.getElementById('tile-' + id); if (!t) return;
+  var b = t.querySelector('.tile-mic-off');
+  if (b) b.classList.toggle('show', !on);
 }
 
-function setTileCam(id,on){
-  var t=document.getElementById('tile-'+id);if(!t)return;
-  var av=t.querySelector('.tile-avatar');
-  var vid=t.querySelector('video');
-  if(on){av.classList.remove('show');vid.style.visibility='visible';}
-  else{av.classList.add('show');vid.style.visibility='hidden';}
+function setTileCam(id, on) {
+  var t = document.getElementById('tile-' + id); if (!t) return;
+  var av  = t.querySelector('.tile-avatar');
+  var vid = t.querySelector('video');
+  if (on)  { av.classList.remove('show'); vid.style.visibility = 'visible'; }
+  else     { av.classList.add('show');    vid.style.visibility = 'hidden';  }
 }
 
-function updateCount(){
-  document.getElementById('cnt').textContent=Object.keys(peers).length+1;
+function updateCount() {
+  document.getElementById('cnt').textContent = Object.keys(peers).length + 1;
 }
 
 /* ── MEDIA ── */
-function getMedia(faceMode,cb){
-  // Thử với facingMode ideal trước
-  var constraints={
-    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
-    video:{facingMode:{ideal:faceMode},width:{ideal:640,max:1280},height:{ideal:480,max:720},frameRate:{ideal:20,max:30}}
+function getMedia(faceMode, cb) {
+  var constraints = {
+    audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true },
+    video: {
+      facingMode: { ideal: faceMode },
+      width: { ideal:640, max:1280 }, height: { ideal:480, max:720 },
+      frameRate: { ideal:20, max:30 }
+    }
   };
   navigator.mediaDevices.getUserMedia(constraints)
-  .then(function(s){cb(null,s);})
+  .then(function(s){ cb(null, s); })
   .catch(function(){
-    // fallback: không dùng facingMode
-    navigator.mediaDevices.getUserMedia({audio:true,video:{width:{ideal:640},height:{ideal:480}}})
-    .then(function(s){cb(null,s);})
+    navigator.mediaDevices.getUserMedia({ audio:true, video:{ width:{ideal:640}, height:{ideal:480} } })
+    .then(function(s){ cb(null, s); })
     .catch(function(){
-      // fallback: chỉ audio
-      navigator.mediaDevices.getUserMedia({audio:true,video:false})
-      .then(function(s){cb(null,s);})
-      .catch(function(e){cb(e,null);});
+      navigator.mediaDevices.getUserMedia({ audio:true, video:false })
+      .then(function(s){ cb(null, s); })
+      .catch(function(e){ cb(e, null); });
     });
   });
 }
 
 /* ── PEER CONNECTION ── */
-function createPC(rid,rname){
-  if(peers[rid])return peers[rid].pc;
-  var pc=new RTCPeerConnection(ICE_CFG);
-  peers[rid]={pc:pc,name:rname,audioOn:true,videoOn:true};
+function createPC(rid, rname) {
+  if (peers[rid]) return peers[rid].pc;
+  var pc = new RTCPeerConnection(ICE_CFG);
+  peers[rid] = { pc:pc, name:rname, audioOn:true, videoOn:true };
 
-  if(localStream)localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
+  if (localStream)
+    localStream.getTracks().forEach(function(t){ pc.addTrack(t, localStream); });
 
-  pc.onicecandidate=function(e){
-    if(e.candidate)socket.emit('ice-candidate',{to:rid,candidate:e.candidate});
+  pc.onicecandidate = function(e) {
+    if (e.candidate)
+      socket.emit('ice-candidate', { to:rid, candidate:e.candidate });
   };
-  pc.ontrack=function(e){
-    var stream=e.streams&&e.streams[0];if(!stream)return;
-    var tile=document.getElementById('tile-'+rid);
-    if(!tile)makeTile(rid,rname,null,false);
-    tile=document.getElementById('tile-'+rid);
-    var vid=tile.querySelector('video');
-    if(vid&&(!vid.srcObject||vid.srcObject.id!==stream.id)){vid.srcObject=stream;safePlay(vid);}
+
+  pc.ontrack = function(e) {
+    var stream = e.streams && e.streams[0]; if (!stream) return;
+    var tile = document.getElementById('tile-' + rid);
+    if (!tile) makeTile(rid, rname, null, false);
+    tile = document.getElementById('tile-' + rid);
+    var vid = tile.querySelector('video');
+    if (vid && (!vid.srcObject || vid.srcObject.id !== stream.id)) {
+      vid.srcObject = stream; safePlay(vid);
+    }
   };
-  pc.onconnectionstatechange=function(){
-    if(pc.connectionState==='failed'&&pc.restartIce)setTimeout(function(){pc.restartIce();},1500);
+
+  pc.onconnectionstatechange = function() {
+    if (pc.connectionState === 'failed' && pc.restartIce)
+      setTimeout(function(){ pc.restartIce(); }, 1500);
   };
+
   return pc;
 }
 
-async function callPeer(rid,rname){
-  if(peers[rid])return;
-  var pc=createPC(rid,rname);
-  if(!document.getElementById('tile-'+rid))makeTile(rid,rname,null,false);
-  try{
-    var offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
+async function callPeer(rid, rname) {
+  if (peers[rid]) return;
+  var pc = createPC(rid, rname);
+  if (!document.getElementById('tile-' + rid)) makeTile(rid, rname, null, false);
+  try {
+    var offer = await pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true });
     await pc.setLocalDescription(offer);
-    socket.emit('offer',{to:rid,offer:offer});
-  }catch(e){console.error('callPeer',e);}
+    socket.emit('offer', { to:rid, offer:offer });
+  } catch(e) { console.error('callPeer', e); }
 }
 
-async function handleOffer(fid,fname,offer){
-  if(peers[fid]){
-    if(myId>fid){try{await peers[fid].pc.setLocalDescription({type:'rollback'});}catch(e){}}
-    else return;
+async function handleOffer(fid, fname, offer) {
+  if (peers[fid]) {
+    if (myId > fid) {
+      try { await peers[fid].pc.setLocalDescription({ type:'rollback' }); } catch(e) {}
+    } else return;
   }
-  var pc=createPC(fid,fname);
-  if(!document.getElementById('tile-'+fid))makeTile(fid,fname,null,false);
-  try{
+  var pc = createPC(fid, fname);
+  if (!document.getElementById('tile-' + fid)) makeTile(fid, fname, null, false);
+  try {
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    var ans=await pc.createAnswer();
+    var ans = await pc.createAnswer();
     await pc.setLocalDescription(ans);
-    socket.emit('answer',{to:fid,answer:ans});
-  }catch(e){console.error('handleOffer',e);}
+    socket.emit('answer', { to:fid, answer:ans });
+  } catch(e) { console.error('handleOffer', e); }
 }
 
-async function handleAnswer(fid,answer){
-  var p=peers[fid];if(!p)return;
-  try{if(p.pc.signalingState==='have-local-offer')await p.pc.setRemoteDescription(new RTCSessionDescription(answer));}
-  catch(e){console.error('handleAnswer',e);}
+async function handleAnswer(fid, answer) {
+  var p = peers[fid]; if (!p) return;
+  try {
+    if (p.pc.signalingState === 'have-local-offer')
+      await p.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  } catch(e) { console.error('handleAnswer', e); }
 }
 
-async function handleICE(fid,candidate){
-  var p=peers[fid];if(!p)return;
-  try{await p.pc.addIceCandidate(new RTCIceCandidate(candidate));}
-  catch(e){if(e.message&&e.message.indexOf('end-of-candidates')<0)console.warn('ICE',e.message);}
-}
-
-/* ── SWAP CAM (Android: stop old tracks first!) ── */
-function swapCam(){
-  if(swapping)return;
-  swapping=true;
-  var icon=document.querySelector('#btn-swap i');
-  icon.classList.add('fa-spin');
-  var newFacing=facing==='user'?'environment':'user';
-
-  /* CRITICAL ANDROID FIX: stop tất cả video tracks TRƯỚC khi mở stream mới */
-  if(localStream){
-    localStream.getVideoTracks().forEach(function(t){t.stop();});
+async function handleICE(fid, candidate) {
+  var p = peers[fid]; if (!p) return;
+  try { await p.pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+  catch(e) {
+    if (e.message && e.message.indexOf('end-of-candidates') < 0)
+      console.warn('ICE', e.message);
   }
+}
 
-  getMedia(newFacing,function(err,newStream){
+/* ── SWAP CAM ── */
+function swapCam() {
+  if (swapping) return;
+  swapping = true;
+  var icon = document.querySelector('#btn-swap i');
+  icon.classList.add('fa-spin');
+  var newFacing = facing === 'user' ? 'environment' : 'user';
+
+  /* Android fix: stop old video tracks BEFORE opening new ones */
+  if (localStream)
+    localStream.getVideoTracks().forEach(function(t){ t.stop(); });
+
+  getMedia(newFacing, function(err, newStream) {
     icon.classList.remove('fa-spin');
-    swapping=false;
-    if(err||!newStream){
+    swapping = false;
+    if (err || !newStream) {
       showToast('Không đổi được camera');
-      /* khôi phục lại camera cũ */
-      getMedia(facing,function(e2,s2){if(s2)applyStream(s2,facing);});
+      getMedia(facing, function(e2, s2){ if (s2) applyStream(s2, facing); });
       return;
     }
-    applyStream(newStream,newFacing);
-    showToast(newFacing==='user'?'📷 Camera trước':'📷 Camera sau');
+    applyStream(newStream, newFacing);
+    showToast(newFacing === 'user' ? '📷 Camera trước' : '📷 Camera sau');
   });
 }
 
-async function applyStream(newStream,newFacing){
-  var newVid=newStream.getVideoTracks()[0]||null;
-
-  /* replaceTrack cho tất cả peer connections */
-  var ids=Object.keys(peers);
-  for(var i=0;i<ids.length;i++){
-    var senders=peers[ids[i]].pc.getSenders();
-    for(var j=0;j<senders.length;j++){
-      if(senders[j].track&&senders[j].track.kind==='video'){
-        try{await senders[j].replaceTrack(newVid);}catch(e){console.warn(e);}
+async function applyStream(newStream, newFacing) {
+  var newVid = newStream.getVideoTracks()[0] || null;
+  var ids = Object.keys(peers);
+  for (var i = 0; i < ids.length; i++) {
+    var senders = peers[ids[i]].pc.getSenders();
+    for (var j = 0; j < senders.length; j++) {
+      if (senders[j].track && senders[j].track.kind === 'video') {
+        try { await senders[j].replaceTrack(newVid); } catch(e) { console.warn(e); }
         break;
       }
     }
   }
-
-  /* cập nhật localStream */
-  localStream.getVideoTracks().forEach(function(t){try{localStream.removeTrack(t);}catch(e){}});
-  if(newVid){localStream.addTrack(newVid);newVid.enabled=camOn;}
-
-  /* dừng audio thừa của newStream */
-  newStream.getAudioTracks().forEach(function(t){t.stop();});
-
-  /* cập nhật local tile */
-  var lt=document.getElementById('tile-local');
-  if(lt){var v=lt.querySelector('video');if(v){v.srcObject=localStream;safePlay(v);}}
-
-  facing=newFacing;
+  localStream.getVideoTracks().forEach(function(t){
+    try { localStream.removeTrack(t); } catch(e) {}
+  });
+  if (newVid) { localStream.addTrack(newVid); newVid.enabled = camOn; }
+  newStream.getAudioTracks().forEach(function(t){ t.stop(); });
+  var lt = document.getElementById('tile-local');
+  if (lt) { var v = lt.querySelector('video'); if (v) { v.srcObject = localStream; safePlay(v); } }
+  facing = newFacing;
 }
 
 /* ── CONTROLS ── */
-function toggleMic(){
-  micOn=!micOn;
-  if(localStream)localStream.getAudioTracks().forEach(function(t){t.enabled=micOn;});
-  var b=document.getElementById('btn-mic');
-  b.classList.toggle('off',!micOn);
-  b.innerHTML=micOn?'<i class="fas fa-microphone"></i>':'<i class="fas fa-microphone-slash"></i>';
-  setTileMic('local',micOn);
-  if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
-  showToast(micOn?'Mic bật':'Mic tắt');
+function toggleMic() {
+  micOn = !micOn;
+  if (localStream)
+    localStream.getAudioTracks().forEach(function(t){ t.enabled = micOn; });
+  var b = document.getElementById('btn-mic');
+  b.classList.toggle('off', !micOn);
+  b.innerHTML = micOn
+    ? '<i class="fas fa-microphone"></i>'
+    : '<i class="fas fa-microphone-slash"></i>';
+  setTileMic('local', micOn);
+  if (socket) socket.emit('media-state', { video:camOn, audio:micOn });
+  showToast(micOn ? 'Mic bật' : 'Mic tắt');
 }
 
-function toggleCam(){
-  camOn=!camOn;
-  if(localStream)localStream.getVideoTracks().forEach(function(t){t.enabled=camOn;});
-  var b=document.getElementById('btn-cam');
-  b.classList.toggle('off',!camOn);
-  b.innerHTML=camOn?'<i class="fas fa-video"></i>':'<i class="fas fa-video-slash"></i>';
-  setTileCam('local',camOn);
-  if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
-  showToast(camOn?'Camera bật':'Camera tắt');
+function toggleCam() {
+  camOn = !camOn;
+  if (localStream)
+    localStream.getVideoTracks().forEach(function(t){ t.enabled = camOn; });
+  var b = document.getElementById('btn-cam');
+  b.classList.toggle('off', !camOn);
+  b.innerHTML = camOn
+    ? '<i class="fas fa-video"></i>'
+    : '<i class="fas fa-video-slash"></i>';
+  setTileCam('local', camOn);
+  if (socket) socket.emit('media-state', { video:camOn, audio:micOn });
+  showToast(camOn ? 'Camera bật' : 'Camera tắt');
 }
 
-function leaveRoom(){
-  Object.keys(peers).forEach(function(id){peers[id].pc.close();delete peers[id];});
-  if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
-  if(socket){socket.disconnect();socket=null;}
-  document.getElementById('video-grid').innerHTML='';
-  document.getElementById('room').style.display='none';
-  document.getElementById('lobby').style.display='flex';
-  micOn=true;camOn=true;facing='user';
-  /* reset buttons */
-  document.getElementById('btn-mic').className='btn';
-  document.getElementById('btn-mic').innerHTML='<i class="fas fa-microphone"></i>';
-  document.getElementById('btn-cam').className='btn';
-  document.getElementById('btn-cam').innerHTML='<i class="fas fa-video"></i>';
+function leaveRoom() {
+  Object.keys(peers).forEach(function(id){
+    peers[id].pc.close(); delete peers[id];
+  });
+  if (localStream) {
+    localStream.getTracks().forEach(function(t){ t.stop(); });
+    localStream = null;
+  }
+  if (socket) { socket.disconnect(); socket = null; }
+  document.getElementById('video-grid').innerHTML = '';
+  document.getElementById('room').style.display = 'none';
+  document.getElementById('lobby').style.display = 'flex';
+  micOn = true; camOn = true; facing = 'user';
+  document.getElementById('btn-mic').className = 'btn';
+  document.getElementById('btn-mic').innerHTML = '<i class="fas fa-microphone"></i>';
+  document.getElementById('btn-cam').className = 'btn';
+  document.getElementById('btn-cam').innerHTML = '<i class="fas fa-video"></i>';
 }
 
-/* ── JOIN ── */
-function init(){
-  document.getElementById('join-btn').onclick=joinRoom;
-  document.getElementById('name-input').onkeydown=function(e){if(e.key==='Enter')joinRoom();};
-  document.getElementById('btn-mic').onclick=toggleMic;
-  document.getElementById('btn-cam').onclick=toggleCam;
-  document.getElementById('btn-swap').onclick=swapCam;
-  document.getElementById('btn-end').onclick=leaveRoom;
-  document.addEventListener('dblclick',function(e){e.preventDefault();},{passive:false});
+/* ── INIT & JOIN ── */
+function init() {
+  document.getElementById('join-btn').onclick = joinRoom;
+  document.getElementById('name-input').onkeydown = function(e){
+    if (e.key === 'Enter') joinRoom();
+  };
+  document.getElementById('btn-mic').onclick  = toggleMic;
+  document.getElementById('btn-cam').onclick  = toggleCam;
+  document.getElementById('btn-swap').onclick = swapCam;
+  document.getElementById('btn-end').onclick  = leaveRoom;
+  document.addEventListener('dblclick', function(e){ e.preventDefault(); }, { passive:false });
 }
 
-function joinRoom(){
-  myName=document.getElementById('name-input').value.trim()||'Guest';
-  document.getElementById('lobby').style.display='none';
-  document.getElementById('room').style.display='flex';
+function joinRoom() {
+  myName = document.getElementById('name-input').value.trim() || 'Guest';
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('room').style.display  = 'flex';
 
-  getMedia(facing,function(err,stream){
-    localStream=stream||null;
-    if(err)showToast('Không truy cập được camera/mic');
-    makeTile('local',myName,localStream,true);
+  getMedia(facing, function(err, stream) {
+    localStream = stream || null;
+    if (err) showToast('Không truy cập được camera/mic');
+    makeTile('local', myName, localStream, true);
 
-    /* iOS 12 FIX: polling trước, websocket sau */
-    socket=io({
-      transports:['polling','websocket'],
-      upgrade:true,
-      rememberUpgrade:false,
-      timeout:15000,
-      reconnection:true,
-      reconnectionAttempts:10,
-      reconnectionDelay:1500
+    /* iOS 12 fix: polling first, upgrade after */
+    socket = io({
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      rememberUpgrade: false,
+      timeout: 15000,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500
     });
 
-    socket.on('connect',function(){
-      myId=socket.id;
-      socket.emit('join',{name:myName});
+    socket.on('connect', function(){
+      myId = socket.id;
+      socket.emit('join', { name:myName });
       updateCount();
     });
-    socket.on('existing-users',function(users){
-      users.forEach(function(u){callPeer(u.id,u.name);});
+    socket.on('existing-users', function(users){
+      users.forEach(function(u){ callPeer(u.id, u.name); });
       updateCount();
     });
-    socket.on('user-joined',function(u){
-      showToast(u.name+' đã tham gia');
+    socket.on('user-joined', function(u){
+      showToast(u.name + ' đã tham gia'); updateCount();
+    });
+    socket.on('offer', function(d){
+      handleOffer(d.from, peers[d.from] ? peers[d.from].name : 'Guest', d.offer);
       updateCount();
     });
-    socket.on('offer',function(d){
-      handleOffer(d.from,peers[d.from]?peers[d.from].name:'Guest',d.offer);
-      updateCount();
+    socket.on('answer',        function(d){ handleAnswer(d.from, d.answer); });
+    socket.on('ice-candidate', function(d){ handleICE(d.from, d.candidate); });
+    socket.on('peer-media-state', function(d){
+      if (peers[d.id]) { peers[d.id].audioOn = d.audio; peers[d.id].videoOn = d.video; }
+      setTileMic(d.id, d.audio);
+      setTileCam(d.id, d.video);
     });
-    socket.on('answer',function(d){handleAnswer(d.from,d.answer);});
-    socket.on('ice-candidate',function(d){handleICE(d.from,d.candidate);});
-    socket.on('peer-media-state',function(d){
-      if(peers[d.id]){peers[d.id].audioOn=d.audio;peers[d.id].videoOn=d.video;}
-      setTileMic(d.id,d.audio);setTileCam(d.id,d.video);
+    socket.on('user-left', function(d){
+      var n = peers[d.id] ? peers[d.id].name : 'Người dùng';
+      showToast(n + ' đã rời phòng');
+      if (peers[d.id]) { peers[d.id].pc.close(); delete peers[d.id]; }
+      removeTile(d.id); updateCount();
     });
-    socket.on('user-left',function(d){
-      var n=peers[d.id]?peers[d.id].name:'Người dùng';
-      showToast(n+' đã rời phòng');
-      if(peers[d.id]){peers[d.id].pc.close();delete peers[d.id];}
-      removeTile(d.id);updateCount();
+    socket.on('disconnect', function(){ showToast('Mất kết nối...'); });
+    socket.on('reconnect',  function(){
+      showToast('Đã kết nối lại');
+      socket.emit('join', { name:myName });
     });
-    socket.on('disconnect',function(){showToast('Mất kết nối...');});
-    socket.on('reconnect',function(){showToast('Đã kết nối lại');socket.emit('join',{name:myName});});
   });
 }
 </script>
