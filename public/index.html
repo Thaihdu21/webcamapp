@@ -8,9 +8,6 @@
 <title>WebRTC Meet</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
 <style>
-/* ═══════════════════════════════════════════
-   RESET & VARIABLES
-═══════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -40,9 +37,7 @@ html, body {
   user-select: none;
 }
 
-/* ═══════════════════════════════════════════
-   LOBBY
-═══════════════════════════════════════════ */
+/* LOBBY */
 #lobby {
   display: flex;
   flex-direction: column;
@@ -117,9 +112,7 @@ html, body {
 }
 #join-btn:active { opacity: .85; transform: scale(.98); }
 
-/* ═══════════════════════════════════════════
-   ROOM WRAPPER
-═══════════════════════════════════════════ */
+/* ROOM */
 #room {
   display: none;
   flex-direction: column;
@@ -127,9 +120,7 @@ html, body {
   background: var(--bg);
 }
 
-/* ═══════════════════════════════════════════
-   VIDEO GRID
-═══════════════════════════════════════════ */
+/* VIDEO GRID */
 #video-grid {
   flex: 1;
   display: grid;
@@ -140,48 +131,18 @@ html, body {
   align-items: stretch;
 }
 
-/* ── Grid classes ── */
-/* 1 người: căn giữa, giới hạn 16:9 */
-.g1 {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-  justify-items: center;
-  align-items: center;
-}
-.g1 .tile {
-  width: 100%;
-  max-width: min(100%, calc((100svh - var(--bar-h) - 20px) * 16 / 9));
-  max-height: calc(100svh - var(--bar-h) - 20px);
-}
-
-/* 2 người */
+.g1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .g2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
-
-/* 3 người: 2 trên – 1 dưới giữa */
 .g3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-.g3 .tile:nth-child(3) {
-  grid-column: 1 / 3;
-  justify-self: center;
-  width: 50%;
-}
-
-/* 4 người: 2×2 */
+.g3 .tile:nth-child(1) { grid-column: 1 / 3; justify-self: center; width: 50%; }
 .g4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-
-/* 5 người: hàng 1 ba ô, hàng 2 hai ô giữa */
 .g5 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .g5 .tile:nth-child(4) { grid-column: 1 / 2; justify-self: end;   width: 100%; }
 .g5 .tile:nth-child(5) { grid-column: 3 / 4; justify-self: start; width: 100%; }
-
-/* 6 người: 3×2 */
 .g6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
-
-/* 7+ */
 .gmany { grid-template-columns: repeat(3, 1fr); }
 
-/* ═══════════════════════════════════════════
-   TILE — Google Meet style
-═══════════════════════════════════════════ */
+/* TILE */
 .tile {
   position: relative;
   background: var(--surface2);
@@ -190,12 +151,8 @@ html, body {
   aspect-ratio: 16 / 9;
   min-width: 0; min-height: 0;
   box-shadow: var(--tile-shadow);
-
-  /* Subtle border */
   outline: 1.5px solid rgba(255,255,255,.07);
   outline-offset: -1px;
-
-  /* Smooth appear */
   animation: tileIn .25s ease;
 }
 
@@ -204,7 +161,6 @@ html, body {
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Video fills the tile */
 .tile video {
   position: absolute;
   inset: 0;
@@ -217,7 +173,6 @@ html, body {
   -webkit-playsinline: true;
 }
 
-/* ── Bottom gradient bar ── */
 .tile-bar {
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -255,7 +210,6 @@ html, body {
 }
 .tile-name i { font-size: .6rem; opacity: .75; }
 
-/* Mic-off badge (top-right) */
 .tile-mic-off {
   position: absolute;
   top: 8px; right: 8px;
@@ -273,7 +227,6 @@ html, body {
 }
 .tile-mic-off.show { display: flex; }
 
-/* Cam-off avatar */
 .tile-avatar {
   position: absolute;
   inset: 0; z-index: 1;
@@ -304,12 +257,24 @@ html, body {
   font-weight: 500;
 }
 
-/* Local tile: mirror front camera */
+/* LOCAL TILE: PiP góc trên trái */
+#tile-local {
+  position: fixed !important;
+  top: 12px;
+  left: 12px;
+  width: 140px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  z-index: 10;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.7);
+  outline: 1.5px solid rgba(255,255,255,.18);
+  outline-offset: -1px;
+  animation: tileIn .25s ease;
+}
 #tile-local video { transform: scaleX(-1); }
 
-/* ═══════════════════════════════════════════
-   BOTTOM CONTROL BAR
-═══════════════════════════════════════════ */
+/* BOTTOM BAR */
 #bar {
   height: var(--bar-h);
   background: var(--bar);
@@ -322,7 +287,6 @@ html, body {
   flex-shrink: 0;
 }
 
-/* Control buttons */
 .btn {
   width: 52px; height: 52px;
   border-radius: 50%;
@@ -343,14 +307,12 @@ html, body {
 .btn:hover { background: #3a3b3f; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .btn:active { transform: scale(.88); }
 
-/* Muted state */
 .btn.off {
   background: var(--danger);
   box-shadow: 0 2px 12px rgba(232,76,61,.45);
 }
 .btn.off:hover { background: #c0392b; }
 
-/* End call */
 .btn.end {
   width: 60px;
   background: var(--danger);
@@ -358,7 +320,6 @@ html, body {
 }
 .btn.end:hover { background: #c0392b; }
 
-/* Participant badge */
 #badge {
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.1);
@@ -373,13 +334,10 @@ html, body {
 }
 #badge i { color: var(--accent); }
 
-/* Swap: chỉ hiện trên mobile */
 #btn-swap { display: none; }
 .is-mobile #btn-swap { display: flex; }
 
-/* ═══════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════ */
+/* TOAST */
 #toast {
   position: fixed;
   bottom: calc(var(--bar-h) + 14px);
@@ -401,21 +359,18 @@ html, body {
 }
 #toast.show { opacity: 1; }
 
-/* ═══════════════════════════════════════════
-   MOBILE RESPONSIVE
-═══════════════════════════════════════════ */
+/* MOBILE */
 @media (max-width: 600px) {
   :root { --gap: 4px; --radius: 10px; --bar-h: 68px; }
 
-  /* Portrait: tối đa 2 cột */
-  .g3 .tile:nth-child(3) { width: 65%; }
+  #tile-local { width: 100px; top: 8px; left: 8px; }
+
+  .g3 .tile:nth-child(1) { width: 65%; }
   .g5, .g6, .gmany { grid-template-columns: 1fr 1fr; }
 
   .btn { width: 46px; height: 46px; font-size: .95rem; }
   .btn.end { width: 54px; }
   #bar { gap: 8px; }
-
-  /* Ẩn badge text trên màn nhỏ, chỉ giữ icon + số */
   #badge { padding: 5px 10px; font-size: .74rem; }
 }
 
@@ -426,18 +381,14 @@ html, body {
   .btn.end { width: 48px; }
 }
 
-/* Landscape mobile */
 @media (max-height: 500px) and (orientation: landscape) {
   :root { --bar-h: 56px; }
   .btn { width: 40px; height: 40px; font-size: .85rem; }
   .btn.end { width: 48px; }
   #bar { gap: 8px; }
-  .g1 .tile {
-    max-height: calc(100svh - var(--bar-h) - 10px);
-  }
+  #tile-local { width: 90px; }
 }
 
-/* PC: tile hover effect */
 @media (hover: hover) {
   .tile:hover .tile-bar { opacity: 1; }
 }
@@ -469,12 +420,11 @@ html, body {
 <div id="toast"></div>
 
 <script>
-/* ── DETECT MOBILE ── */
+/* DETECT MOBILE */
 (function(){
   var ua = navigator.userAgent || '';
   if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua))
     document.body.classList.add('is-mobile');
-  /* Ẩn swap nếu chỉ có 1 camera */
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
     navigator.mediaDevices.enumerateDevices().then(function(devs){
       var cams = devs.filter(function(d){ return d.kind === 'videoinput'; });
@@ -484,7 +434,7 @@ html, body {
   }
 })();
 
-/* ── LOAD SOCKET.IO ── */
+/* LOAD SOCKET.IO */
 (function(){
   var s = document.createElement('script');
   s.src = '/socket.io/socket.io.js';
@@ -493,7 +443,7 @@ html, body {
   document.head.appendChild(s);
 })();
 
-/* ── STATE ── */
+/* STATE */
 var socket, myId, myName = 'Guest';
 var localStream = null;
 var micOn = true, camOn = true, facing = 'user', swapping = false;
@@ -513,7 +463,7 @@ var ICE_CFG = {
   iceCandidatePoolSize: 8
 };
 
-/* ── TOAST ── */
+/* TOAST */
 var _tt;
 function showToast(msg, dur) {
   var el = document.getElementById('toast');
@@ -523,16 +473,16 @@ function showToast(msg, dur) {
   _tt = setTimeout(function(){ el.classList.remove('show'); }, dur || 2500);
 }
 
-/* ── GRID ── */
+/* GRID — chỉ đếm peer tiles, bỏ qua local */
 function updateGrid() {
   var g = document.getElementById('video-grid');
-  var n = g.children.length;
+  var n = g.querySelectorAll('.tile:not(#tile-local)').length;
   g.className =
     n <= 1 ? 'g1' : n === 2 ? 'g2' : n === 3 ? 'g3' :
     n === 4 ? 'g4' : n === 5 ? 'g5' : n === 6 ? 'g6' : 'gmany';
 }
 
-/* ── HELPERS ── */
+/* HELPERS */
 function esc(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -542,7 +492,7 @@ function safePlay(v) {
   if (p && p.catch) p.catch(function(){});
 }
 
-/* ── TILE ── */
+/* TILE */
 function makeTile(id, name, stream, isLocal) {
   var tile = document.createElement('div');
   tile.className = 'tile';
@@ -604,7 +554,7 @@ function updateCount() {
   document.getElementById('cnt').textContent = Object.keys(peers).length + 1;
 }
 
-/* ── MEDIA ── */
+/* MEDIA */
 function getMedia(faceMode, cb) {
   var constraints = {
     audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true },
@@ -627,7 +577,7 @@ function getMedia(faceMode, cb) {
   });
 }
 
-/* ── PEER CONNECTION ── */
+/* PEER CONNECTION */
 function createPC(rid, rname) {
   if (peers[rid]) return peers[rid].pc;
   var pc = new RTCPeerConnection(ICE_CFG);
@@ -704,7 +654,7 @@ async function handleICE(fid, candidate) {
   }
 }
 
-/* ── SWAP CAM ── */
+/* SWAP CAM */
 function swapCam() {
   if (swapping) return;
   swapping = true;
@@ -712,7 +662,6 @@ function swapCam() {
   icon.classList.add('fa-spin');
   var newFacing = facing === 'user' ? 'environment' : 'user';
 
-  /* Android fix: stop old video tracks BEFORE opening new ones */
   if (localStream)
     localStream.getVideoTracks().forEach(function(t){ t.stop(); });
 
@@ -751,7 +700,7 @@ async function applyStream(newStream, newFacing) {
   facing = newFacing;
 }
 
-/* ── CONTROLS ── */
+/* CONTROLS */
 function toggleMic() {
   micOn = !micOn;
   if (localStream)
@@ -799,7 +748,7 @@ function leaveRoom() {
   document.getElementById('btn-cam').innerHTML = '<i class="fas fa-video"></i>';
 }
 
-/* ── INIT & JOIN ── */
+/* INIT & JOIN */
 function init() {
   document.getElementById('join-btn').onclick = joinRoom;
   document.getElementById('name-input').onkeydown = function(e){
@@ -822,7 +771,6 @@ function joinRoom() {
     if (err) showToast('Không truy cập được camera/mic');
     makeTile('local', myName, localStream, true);
 
-    /* iOS 12 fix: polling first, upgrade after */
     socket = io({
       transports: ['polling', 'websocket'],
       upgrade: true,
