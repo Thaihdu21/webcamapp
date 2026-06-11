@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>WebRTC Meet</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-<!-- Socket.io loaded after DOM -->
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -15,24 +14,30 @@
   --bar:#1e1f22;--accent:#8ab4f8;--danger:#f28b82;
   --text:#e8eaed;--dim:#9aa0a6;--bar-h:72px;--gap:4px;
 }
-html,body{height:100%;background:var(--bg);color:var(--text);
+html,body{
+  height:100%;background:var(--bg);color:var(--text);
   font-family:'Segoe UI',Roboto,Arial,sans-serif;
   overflow:hidden;-webkit-tap-highlight-color:transparent;
-  -webkit-user-select:none;user-select:none;}
+  -webkit-user-select:none;user-select:none;
+}
 
 /* ── LOBBY ── */
 #lobby{display:flex;flex-direction:column;align-items:center;
   justify-content:center;height:100%;gap:18px;padding:28px;}
 #lobby h1{font-size:1.5rem;font-weight:700;}
 #lobby p{color:var(--dim);font-size:.88rem;text-align:center;}
-#name-input{width:100%;max-width:300px;padding:13px 16px;
+#name-input{
+  width:100%;max-width:300px;padding:13px 16px;
   border-radius:8px;border:2px solid var(--surface);
   background:var(--surface2);color:var(--text);font-size:1rem;
-  outline:none;-webkit-appearance:none;}
+  outline:none;-webkit-appearance:none;
+}
 #name-input:focus{border-color:var(--accent);}
-#join-btn{width:100%;max-width:300px;padding:13px;
+#join-btn{
+  width:100%;max-width:300px;padding:13px;
   background:var(--accent);color:#202124;font-size:1rem;
-  font-weight:700;border:none;border-radius:8px;cursor:pointer;}
+  font-weight:700;border:none;border-radius:8px;cursor:pointer;
+}
 
 /* ── ROOM ── */
 #room{display:none;flex-direction:column;height:100%;}
@@ -40,79 +45,119 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 /* ── VIDEO GRID ── */
 #video-grid{
   flex:1;display:grid;gap:var(--gap);padding:var(--gap);
-  background:var(--bg);overflow:hidden;align-content:center;
+  background:var(--bg);overflow:hidden;
+  align-items:stretch;
 }
 
-/* Grid layouts – Google Meet style */
-/* 1 người: 1 ô to giữa */
-.g1{grid-template-columns:1fr;grid-template-rows:1fr;}
-/* 2 người: 2 cột bằng nhau */
-.g2{grid-template-columns:1fr 1fr;}
-/* 3 người: hàng trên 2 ô, hàng dưới 1 ô giữa */
-.g3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+/*
+  GOOGLE MEET GRID LOGIC:
+  1 người  → 1 cột, căn giữa, giới hạn size
+  2 người  → 2 cột bằng nhau, full height
+  3 người  → hàng 1: 2 ô, hàng 2: 1 ô giữa (50% width)
+  4 người  → 2x2
+  5 người  → hàng 1: 3 ô, hàng 2: 2 ô giữa
+  6 người  → 3x2
+  7-9      → 3x3
+*/
+
+/* 1 */
+.g1{
+  grid-template-columns:1fr;
+  grid-template-rows:1fr;
+  justify-items:center;align-items:center;
+}
+.g1 .tile{
+  width:100%;
+  max-width:calc((100vh - var(--bar-h) - 8px) * 16 / 9);
+  max-height:calc(100vh - var(--bar-h) - 8px);
+}
+
+/* 2 */
+.g2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;}
+
+/* 3 — 2 trên 1 dưới giữa */
+.g3{
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+}
 .g3 .tile:nth-child(3){
   grid-column:1/3;
-  max-width:50%;justify-self:center;width:100%;
+  justify-self:center;
+  width:50%;
 }
-/* 4 người: 2x2 */
+
+/* 4 */
 .g4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
-/* 5-6 người: 3 cột */
-.g5,.g6{grid-template-columns:1fr 1fr 1fr;}
-/* 7+: 3 cột */
+
+/* 5 — hàng 1: 3, hàng 2: 2 giữa */
+.g5{
+  grid-template-columns:1fr 1fr 1fr;
+  grid-template-rows:1fr 1fr;
+}
+.g5 .tile:nth-child(4){grid-column:1/2;justify-self:end;width:100%;}
+.g5 .tile:nth-child(5){grid-column:3/4;justify-self:start;width:100%;}
+
+/* 6 */
+.g6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
+
+/* 7+ */
 .gmany{grid-template-columns:1fr 1fr 1fr;}
 
 /* ── TILE ── */
 .tile{
   position:relative;background:#1a1b1e;border-radius:10px;
   overflow:hidden;aspect-ratio:16/9;
-  display:flex;align-items:center;justify-content:center;
+  min-height:0;min-width:0;
 }
 .tile video{
-  width:100%;height:100%;object-fit:cover;
-  display:block;background:#000;border-radius:10px;
-  /* iOS critical */
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;display:block;
+  background:#000;
   -webkit-playsinline:true;
 }
-/* tên + mic status */
+/* gradient bar bottom */
 .tile-bar{
   position:absolute;bottom:0;left:0;right:0;
-  padding:20px 8px 6px;
-  background:linear-gradient(transparent,rgba(0,0,0,.55));
+  padding:24px 8px 6px;
+  background:linear-gradient(transparent,rgba(0,0,0,.6));
   display:flex;align-items:center;justify-content:space-between;
-  pointer-events:none;
+  pointer-events:none;z-index:2;
 }
 .tile-name{
   color:#fff;font-size:.75rem;font-weight:500;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  display:flex;align-items:center;gap:5px;max-width:80%;
+  display:flex;align-items:center;gap:4px;max-width:85%;
 }
-.tile-mic-icon{
-  width:24px;height:24px;border-radius:50%;
+.tile-mic-off{
+  width:22px;height:22px;border-radius:50%;
   background:rgba(242,139,130,.9);color:#fff;
   display:none;align-items:center;justify-content:center;
-  font-size:.6rem;flex-shrink:0;
+  font-size:.58rem;flex-shrink:0;
 }
-.tile-mic-icon.show{display:flex;}
+.tile-mic-off.show{display:flex;}
 
 /* cam-off avatar */
 .tile-avatar{
-  position:absolute;inset:0;display:none;
-  flex-direction:column;align-items:center;justify-content:center;
+  position:absolute;inset:0;z-index:1;
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;
   background:#1a1b1e;gap:8px;pointer-events:none;
 }
 .tile-avatar.show{display:flex;}
 .av-circle{
   width:56px;height:56px;border-radius:50%;
-  background:var(--surface);display:flex;align-items:center;
-  justify-content:center;font-size:1.4rem;color:var(--dim);
+  background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;color:var(--dim);
 }
 .av-name{color:var(--dim);font-size:.8rem;}
 
-/* ── BAR ── */
+/* ── BOTTOM BAR ── */
 #bar{
   height:var(--bar-h);background:var(--bar);
   display:flex;align-items:center;justify-content:center;
-  gap:10px;padding:0 12px;flex-shrink:0;
+  gap:10px;padding:0 16px;flex-shrink:0;
   border-top:1px solid rgba(255,255,255,.07);
 }
 .btn{
@@ -127,14 +172,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 .btn.end{background:#d93025;width:58px;}
 #badge{
   background:var(--surface);color:var(--dim);
-  padding:5px 12px;border-radius:20px;font-size:.78rem;
-  display:flex;align-items:center;gap:5px;flex-shrink:0;
+  padding:5px 12px;border-radius:20px;
+  font-size:.78rem;display:flex;align-items:center;gap:5px;
 }
+
+/* Ẩn swap cam trên desktop, chỉ hiện trên thiết bị có nhiều camera (mobile) */
+#btn-swap{display:none;}
+.is-mobile #btn-swap{display:flex;}
 
 /* ── TOAST ── */
 #toast{
-  position:fixed;bottom:calc(var(--bar-h) + 10px);left:50%;
-  transform:translateX(-50%);
+  position:fixed;
+  bottom:calc(var(--bar-h) + 10px);
+  left:50%;transform:translateX(-50%);
   background:rgba(60,64,67,.95);color:var(--text);
   padding:8px 16px;border-radius:8px;font-size:.82rem;
   pointer-events:none;opacity:0;transition:opacity .3s;
@@ -142,25 +192,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 }
 #toast.show{opacity:1;}
 
-/* ── MOBILE ── */
+/* ── RESPONSIVE ── */
 @media(max-width:600px) and (orientation:portrait){
+  .g3 .tile:nth-child(3){width:60%;}
   .g5,.g6,.gmany{grid-template-columns:1fr 1fr;}
-  .g3 .tile:nth-child(3){max-width:100%;}
   .btn{width:44px;height:44px;font-size:.95rem;}
   .btn.end{width:50px;}
   #bar{gap:8px;}
 }
 @media(max-width:380px){
-  #bar{gap:6px;padding:0 6px;}
+  #bar{gap:6px;padding:0 8px;}
   .btn{width:40px;height:40px;font-size:.88rem;}
-}
-
-/* 1 tile: giới hạn chiều cao để không to quá */
-.g1 .tile{
-  max-width:min(100%, calc((100vh - var(--bar-h) - 60px) * 16/9));
-  max-height:calc(100vh - var(--bar-h) - 60px);
-  justify-self:center;align-self:center;
-  width:100%;
 }
 </style>
 </head>
@@ -178,10 +220,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 <div id="room">
   <div id="video-grid" class="g1"></div>
   <div id="bar">
-    <button class="btn" id="btn-mic"><i class="fas fa-microphone"></i></button>
-    <button class="btn" id="btn-cam"><i class="fas fa-video"></i></button>
-    <button class="btn" id="btn-swap"><i class="fas fa-sync-alt"></i></button>
-    <button class="btn end" id="btn-end"><i class="fas fa-phone-slash"></i></button>
+    <button class="btn" id="btn-mic" title="Mic"><i class="fas fa-microphone"></i></button>
+    <button class="btn" id="btn-cam" title="Camera"><i class="fas fa-video"></i></button>
+    <button class="btn" id="btn-swap" title="Đổi camera"><i class="fas fa-sync-alt"></i></button>
+    <button class="btn end" id="btn-end" title="Rời phòng"><i class="fas fa-phone-slash"></i></button>
     <div id="badge"><i class="fas fa-users"></i><span id="cnt">1</span></div>
   </div>
 </div>
@@ -189,48 +231,56 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 <div id="toast"></div>
 
 <script>
-// ─── Socket.io: load runtime từ server để tương thích mọi version ───
-(function loadSocketIO(){
+/* ── DETECT MOBILE để hiện nút swap ── */
+(function(){
+  var ua=navigator.userAgent||'';
+  var isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  if(isMobile)document.body.classList.add('is-mobile');
+  /* iOS 12 bổ sung: kiểm tra enumerateDevices để detect có nhiều camera không */
+  if(isMobile&&navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){
+    navigator.mediaDevices.enumerateDevices().then(function(devices){
+      var cams=devices.filter(function(d){return d.kind==='videoinput';});
+      /* chỉ hiện swap nếu có >= 2 camera */
+      if(cams.length<2)document.getElementById('btn-swap').style.display='none';
+    }).catch(function(){});
+  }
+})();
+
+/* ── LOAD SOCKET.IO ── */
+(function(){
   var s=document.createElement('script');
   s.src='/socket.io/socket.io.js';
   s.onload=init;
-  s.onerror=function(){toast('Không tải được socket.io');};
+  s.onerror=function(){showToast('Lỗi tải socket.io');};
   document.head.appendChild(s);
 })();
 
-// ─── GLOBALS ───
+/* ── STATE ── */
 var socket,myId,myName='Guest';
 var localStream=null;
-var micOn=true,camOn=true;
-var facing='user'; // 'user' | 'environment'
-var swapping=false;
-var peers={}; // id -> {pc,name,audioOn,videoOn}
+var micOn=true,camOn=true,facing='user',swapping=false;
+var peers={};
 
-var ICE={
+var ICE_CFG={
   iceServers:[
     {urls:'stun:stun.l.google.com:19302'},
     {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'turn:openrelay.metered.ca:80',
-     username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443',
-     username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443?transport=tcp',
-     username:'openrelayproject',credential:'openrelayproject'}
+    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
   ],
   iceCandidatePoolSize:8
 };
 
-// ─── TOAST ───
-var _toastTimer;
-function toast(msg,dur){
-  dur=dur||2500;
+/* ── TOAST ── */
+var _tt;
+function showToast(msg,dur){
   var el=document.getElementById('toast');
   el.textContent=msg;el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer=setTimeout(function(){el.classList.remove('show');},dur);
+  clearTimeout(_tt);_tt=setTimeout(function(){el.classList.remove('show');},dur||2500);
 }
 
-// ─── GRID ───
+/* ── GRID ── */
 function updateGrid(){
   var g=document.getElementById('video-grid');
   var n=g.children.length;
@@ -239,7 +289,11 @@ function updateGrid(){
     n===4?'g4':n===5?'g5':n===6?'g6':'gmany';
 }
 
-// ─── TILE ───
+/* ── HELPERS ── */
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function safePlay(v){var p=v.play();if(p&&p.catch)p.catch(function(){});}
+
+/* ── TILE ── */
 function makeTile(id,name,stream,isLocal){
   var tile=document.createElement('div');
   tile.className='tile';tile.id='tile-'+id;
@@ -248,7 +302,7 @@ function makeTile(id,name,stream,isLocal){
   video.autoplay=true;
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
-  video.muted=isLocal;
+  video.muted=!!isLocal;
   if(stream){video.srcObject=stream;safePlay(video);}
 
   var avatar=document.createElement('div');
@@ -261,34 +315,29 @@ function makeTile(id,name,stream,isLocal){
 
   var nameEl=document.createElement('div');
   nameEl.className='tile-name';
-  nameEl.innerHTML='<i class="fas fa-user" style="font-size:.65rem"></i>'+esc(name)
-    +(isLocal?' <span style="color:var(--dim)">(Bạn)</span>':'');
+  nameEl.innerHTML='<i class="fas fa-user" style="font-size:.6rem;opacity:.7"></i> '
+    +esc(name)+(isLocal?' <span style="opacity:.6">(Bạn)</span>':'');
 
-  var micIcon=document.createElement('div');
-  micIcon.className='tile-mic-icon';
-  micIcon.innerHTML='<i class="fas fa-microphone-slash"></i>';
+  var micBadge=document.createElement('div');
+  micBadge.className='tile-mic-off';
+  micBadge.innerHTML='<i class="fas fa-microphone-slash"></i>';
 
-  bar.appendChild(nameEl);bar.appendChild(micIcon);
+  bar.appendChild(nameEl);bar.appendChild(micBadge);
   tile.append(video,avatar,bar);
   document.getElementById('video-grid').appendChild(tile);
   updateGrid();
-  return tile;
-}
-
-function safePlay(video){
-  var p=video.play();
-  if(p&&p.catch)p.catch(function(){});
 }
 
 function removeTile(id){
   var t=document.getElementById('tile-'+id);
-  if(t)t.remove();updateGrid();
+  if(t)t.remove();
+  updateGrid();
 }
 
 function setTileMic(id,on){
   var t=document.getElementById('tile-'+id);if(!t)return;
-  var ic=t.querySelector('.tile-mic-icon');
-  if(ic)ic.classList.toggle('show',!on);
+  var b=t.querySelector('.tile-mic-off');
+  if(b)b.classList.toggle('show',!on);
 }
 
 function setTileCam(id,on){
@@ -296,37 +345,28 @@ function setTileCam(id,on){
   var av=t.querySelector('.tile-avatar');
   var vid=t.querySelector('video');
   if(on){av.classList.remove('show');vid.style.visibility='visible';}
-  else {av.classList.add('show');  vid.style.visibility='hidden';}
+  else{av.classList.add('show');vid.style.visibility='hidden';}
 }
 
 function updateCount(){
   document.getElementById('cnt').textContent=Object.keys(peers).length+1;
 }
 
-function esc(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ─── GET MEDIA ───
-// Android: phải stop stream cũ TRƯỚC khi mở stream mới cùng loại camera
-// iOS 12: không hỗ trợ facingMode exact → dùng ideal, fallback plain
-function getMedia(facingMode,cb){
+/* ── MEDIA ── */
+function getMedia(faceMode,cb){
+  // Thử với facingMode ideal trước
   var constraints={
     audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
-    video:{
-      facingMode:{ideal:facingMode},
-      width:{ideal:640,max:1280},height:{ideal:480,max:720},
-      frameRate:{ideal:20,max:30}
-    }
+    video:{facingMode:{ideal:faceMode},width:{ideal:640,max:1280},height:{ideal:480,max:720},frameRate:{ideal:20,max:30}}
   };
   navigator.mediaDevices.getUserMedia(constraints)
   .then(function(s){cb(null,s);})
   .catch(function(){
-    // fallback 1: bỏ facingMode constraint
+    // fallback: không dùng facingMode
     navigator.mediaDevices.getUserMedia({audio:true,video:{width:{ideal:640},height:{ideal:480}}})
     .then(function(s){cb(null,s);})
     .catch(function(){
-      // fallback 2: chỉ audio
+      // fallback: chỉ audio
       navigator.mediaDevices.getUserMedia({audio:true,video:false})
       .then(function(s){cb(null,s);})
       .catch(function(e){cb(e,null);});
@@ -334,190 +374,164 @@ function getMedia(facingMode,cb){
   });
 }
 
-// ─── PEER CONNECTION ───
-function createPC(remoteId,remoteName){
-  if(peers[remoteId])return peers[remoteId].pc;
-  var pc=new RTCPeerConnection(ICE);
-  peers[remoteId]={pc:pc,name:remoteName,audioOn:true,videoOn:true};
+/* ── PEER CONNECTION ── */
+function createPC(rid,rname){
+  if(peers[rid])return peers[rid].pc;
+  var pc=new RTCPeerConnection(ICE_CFG);
+  peers[rid]={pc:pc,name:rname,audioOn:true,videoOn:true};
 
-  if(localStream){
-    localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
-  }
+  if(localStream)localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
 
   pc.onicecandidate=function(e){
-    if(e.candidate)socket.emit('ice-candidate',{to:remoteId,candidate:e.candidate});
+    if(e.candidate)socket.emit('ice-candidate',{to:rid,candidate:e.candidate});
   };
-
   pc.ontrack=function(e){
     var stream=e.streams&&e.streams[0];if(!stream)return;
-    var tile=document.getElementById('tile-'+remoteId);
-    if(!tile){
-      tile=makeTile(remoteId,remoteName,null,false);
-    }
+    var tile=document.getElementById('tile-'+rid);
+    if(!tile)makeTile(rid,rname,null,false);
+    tile=document.getElementById('tile-'+rid);
     var vid=tile.querySelector('video');
-    if(vid&&(!vid.srcObject||vid.srcObject.id!==stream.id)){
-      vid.srcObject=stream;safePlay(vid);
-    }
+    if(vid&&(!vid.srcObject||vid.srcObject.id!==stream.id)){vid.srcObject=stream;safePlay(vid);}
   };
-
   pc.onconnectionstatechange=function(){
-    var st=pc.connectionState;
-    console.log('[PC '+remoteName+']',st);
-    if(st==='failed'&&pc.restartIce)setTimeout(function(){pc.restartIce();},1500);
+    if(pc.connectionState==='failed'&&pc.restartIce)setTimeout(function(){pc.restartIce();},1500);
   };
-
   return pc;
 }
 
-async function callPeer(remoteId,remoteName){
-  if(peers[remoteId])return;
-  var pc=createPC(remoteId,remoteName);
-  if(!document.getElementById('tile-'+remoteId))makeTile(remoteId,remoteName,null,false);
+async function callPeer(rid,rname){
+  if(peers[rid])return;
+  var pc=createPC(rid,rname);
+  if(!document.getElementById('tile-'+rid))makeTile(rid,rname,null,false);
   try{
     var offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
     await pc.setLocalDescription(offer);
-    socket.emit('offer',{to:remoteId,offer:offer});
+    socket.emit('offer',{to:rid,offer:offer});
   }catch(e){console.error('callPeer',e);}
 }
 
-async function handleOffer(fromId,fromName,offer){
-  // Glare resolution: higher socket id becomes answerer
-  if(peers[fromId]){
-    if(myId>fromId){
-      try{await peers[fromId].pc.setLocalDescription({type:'rollback'});}catch(e){}
-    } else return;
+async function handleOffer(fid,fname,offer){
+  if(peers[fid]){
+    if(myId>fid){try{await peers[fid].pc.setLocalDescription({type:'rollback'});}catch(e){}}
+    else return;
   }
-  var pc=createPC(fromId,fromName);
-  if(!document.getElementById('tile-'+fromId))makeTile(fromId,fromName,null,false);
+  var pc=createPC(fid,fname);
+  if(!document.getElementById('tile-'+fid))makeTile(fid,fname,null,false);
   try{
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    var answer=await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('answer',{to:fromId,answer:answer});
+    var ans=await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    socket.emit('answer',{to:fid,answer:ans});
   }catch(e){console.error('handleOffer',e);}
 }
 
-async function handleAnswer(fromId,answer){
-  var p=peers[fromId];if(!p)return;
-  try{
-    if(p.pc.signalingState==='have-local-offer')
-      await p.pc.setRemoteDescription(new RTCSessionDescription(answer));
-  }catch(e){console.error('handleAnswer',e);}
+async function handleAnswer(fid,answer){
+  var p=peers[fid];if(!p)return;
+  try{if(p.pc.signalingState==='have-local-offer')await p.pc.setRemoteDescription(new RTCSessionDescription(answer));}
+  catch(e){console.error('handleAnswer',e);}
 }
 
-async function handleICE(fromId,candidate){
-  var p=peers[fromId];if(!p)return;
+async function handleICE(fid,candidate){
+  var p=peers[fid];if(!p)return;
   try{await p.pc.addIceCandidate(new RTCIceCandidate(candidate));}
   catch(e){if(e.message&&e.message.indexOf('end-of-candidates')<0)console.warn('ICE',e.message);}
 }
 
-// ─── SWAP CAM (Android fix) ───
-// Bước quan trọng: stop TOÀN BỘ video tracks của localStream TRƯỚC khi getUserMedia
+/* ── SWAP CAM (Android: stop old tracks first!) ── */
 function swapCam(){
   if(swapping)return;
   swapping=true;
   var icon=document.querySelector('#btn-swap i');
   icon.classList.add('fa-spin');
-
   var newFacing=facing==='user'?'environment':'user';
 
-  // STOP old video tracks first — Android requirement
+  /* CRITICAL ANDROID FIX: stop tất cả video tracks TRƯỚC khi mở stream mới */
   if(localStream){
     localStream.getVideoTracks().forEach(function(t){t.stop();});
   }
 
-  getMedia(newFacing,async function(err,newStream){
+  getMedia(newFacing,function(err,newStream){
     icon.classList.remove('fa-spin');
     swapping=false;
     if(err||!newStream){
-      toast('Không đổi được camera');
-      console.error('swapCam',err);
-      // try restore old camera
-      getMedia(facing,function(e2,s2){
-        if(s2)applyNewStream(s2,facing);
-      });
+      showToast('Không đổi được camera');
+      /* khôi phục lại camera cũ */
+      getMedia(facing,function(e2,s2){if(s2)applyStream(s2,facing);});
       return;
     }
-    await applyNewStream(newStream,newFacing);
-    toast(newFacing==='user'?'📷 Camera trước':'📷 Camera sau');
+    applyStream(newStream,newFacing);
+    showToast(newFacing==='user'?'📷 Camera trước':'📷 Camera sau');
   });
 }
 
-async function applyNewStream(newStream,newFacing){
-  var newVid=newStream.getVideoTracks()[0];
+async function applyStream(newStream,newFacing){
+  var newVid=newStream.getVideoTracks()[0]||null;
 
-  // replaceTrack in all PCs
+  /* replaceTrack cho tất cả peer connections */
   var ids=Object.keys(peers);
   for(var i=0;i<ids.length;i++){
-    var pc=peers[ids[i]].pc;
-    var senders=pc.getSenders();
+    var senders=peers[ids[i]].pc.getSenders();
     for(var j=0;j<senders.length;j++){
       if(senders[j].track&&senders[j].track.kind==='video'){
-        try{await senders[j].replaceTrack(newVid||null);}catch(e){console.warn('replaceTrack',e);}
+        try{await senders[j].replaceTrack(newVid);}catch(e){console.warn(e);}
         break;
       }
     }
   }
 
-  // Update localStream reference
-  // Remove old video tracks from localStream
-  localStream.getVideoTracks().forEach(function(t){
-    try{localStream.removeTrack(t);}catch(e){}
-  });
-  if(newVid)localStream.addTrack(newVid);
+  /* cập nhật localStream */
+  localStream.getVideoTracks().forEach(function(t){try{localStream.removeTrack(t);}catch(e){}});
+  if(newVid){localStream.addTrack(newVid);newVid.enabled=camOn;}
 
-  // Stop extra audio from newStream (we keep existing audio track)
+  /* dừng audio thừa của newStream */
   newStream.getAudioTracks().forEach(function(t){t.stop();});
 
-  // Update local tile
-  var localTile=document.getElementById('tile-local');
-  if(localTile){
-    var vid=localTile.querySelector('video');
-    if(vid){vid.srcObject=localStream;safePlay(vid);}
-  }
+  /* cập nhật local tile */
+  var lt=document.getElementById('tile-local');
+  if(lt){var v=lt.querySelector('video');if(v){v.srcObject=localStream;safePlay(v);}}
 
   facing=newFacing;
-
-  // Re-apply cam mute state
-  localStream.getVideoTracks().forEach(function(t){t.enabled=camOn;});
 }
 
-// ─── CONTROLS ───
+/* ── CONTROLS ── */
 function toggleMic(){
   micOn=!micOn;
   if(localStream)localStream.getAudioTracks().forEach(function(t){t.enabled=micOn;});
-  var btn=document.getElementById('btn-mic');
-  btn.classList.toggle('off',!micOn);
-  btn.innerHTML=micOn?'<i class="fas fa-microphone"></i>':'<i class="fas fa-microphone-slash"></i>';
+  var b=document.getElementById('btn-mic');
+  b.classList.toggle('off',!micOn);
+  b.innerHTML=micOn?'<i class="fas fa-microphone"></i>':'<i class="fas fa-microphone-slash"></i>';
   setTileMic('local',micOn);
   if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
-  toast(micOn?'Mic bật':'Mic tắt');
+  showToast(micOn?'Mic bật':'Mic tắt');
 }
 
 function toggleCam(){
   camOn=!camOn;
   if(localStream)localStream.getVideoTracks().forEach(function(t){t.enabled=camOn;});
-  var btn=document.getElementById('btn-cam');
-  btn.classList.toggle('off',!camOn);
-  btn.innerHTML=camOn?'<i class="fas fa-video"></i>':'<i class="fas fa-video-slash"></i>';
+  var b=document.getElementById('btn-cam');
+  b.classList.toggle('off',!camOn);
+  b.innerHTML=camOn?'<i class="fas fa-video"></i>':'<i class="fas fa-video-slash"></i>';
   setTileCam('local',camOn);
   if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
-  toast(camOn?'Camera bật':'Camera tắt');
+  showToast(camOn?'Camera bật':'Camera tắt');
 }
 
 function leaveRoom(){
-  Object.keys(peers).forEach(function(id){
-    peers[id].pc.close();delete peers[id];
-  });
+  Object.keys(peers).forEach(function(id){peers[id].pc.close();delete peers[id];});
   if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
   if(socket){socket.disconnect();socket=null;}
   document.getElementById('video-grid').innerHTML='';
   document.getElementById('room').style.display='none';
   document.getElementById('lobby').style.display='flex';
   micOn=true;camOn=true;facing='user';
+  /* reset buttons */
+  document.getElementById('btn-mic').className='btn';
+  document.getElementById('btn-mic').innerHTML='<i class="fas fa-microphone"></i>';
+  document.getElementById('btn-cam').className='btn';
+  document.getElementById('btn-cam').innerHTML='<i class="fas fa-video"></i>';
 }
 
-// ─── JOIN ───
+/* ── JOIN ── */
 function init(){
   document.getElementById('join-btn').onclick=joinRoom;
   document.getElementById('name-input').onkeydown=function(e){if(e.key==='Enter')joinRoom();};
@@ -534,21 +548,19 @@ function joinRoom(){
   document.getElementById('room').style.display='flex';
 
   getMedia(facing,function(err,stream){
-    if(err){toast('Không truy cập được camera/mic');console.error(err);}
-    else{localStream=stream;}
-
+    localStream=stream||null;
+    if(err)showToast('Không truy cập được camera/mic');
     makeTile('local',myName,localStream,true);
 
-    // iOS 12 CRITICAL: chỉ dùng polling trước, upgrade sau
-    // Tránh lỗi WebSocket handshake trên iOS 12 Safari
+    /* iOS 12 FIX: polling trước, websocket sau */
     socket=io({
       transports:['polling','websocket'],
       upgrade:true,
       rememberUpgrade:false,
-      timeout:10000,
+      timeout:15000,
       reconnection:true,
-      reconnectionAttempts:5,
-      reconnectionDelay:1000
+      reconnectionAttempts:10,
+      reconnectionDelay:1500
     });
 
     socket.on('connect',function(){
@@ -556,44 +568,32 @@ function joinRoom(){
       socket.emit('join',{name:myName});
       updateCount();
     });
-
     socket.on('existing-users',function(users){
       users.forEach(function(u){callPeer(u.id,u.name);});
       updateCount();
     });
-
     socket.on('user-joined',function(u){
-      toast(u.name+' đã tham gia');
+      showToast(u.name+' đã tham gia');
       updateCount();
     });
-
     socket.on('offer',function(d){
-      var name=peers[d.from]?peers[d.from].name:'Guest';
-      handleOffer(d.from,name,d.offer);
+      handleOffer(d.from,peers[d.from]?peers[d.from].name:'Guest',d.offer);
       updateCount();
     });
-
     socket.on('answer',function(d){handleAnswer(d.from,d.answer);});
     socket.on('ice-candidate',function(d){handleICE(d.from,d.candidate);});
-
     socket.on('peer-media-state',function(d){
       if(peers[d.id]){peers[d.id].audioOn=d.audio;peers[d.id].videoOn=d.video;}
-      setTileMic(d.id,d.audio);
-      setTileCam(d.id,d.video);
+      setTileMic(d.id,d.audio);setTileCam(d.id,d.video);
     });
-
     socket.on('user-left',function(d){
-      var name=peers[d.id]?peers[d.id].name:'Người dùng';
-      toast(name+' đã rời phòng');
+      var n=peers[d.id]?peers[d.id].name:'Người dùng';
+      showToast(n+' đã rời phòng');
       if(peers[d.id]){peers[d.id].pc.close();delete peers[d.id];}
       removeTile(d.id);updateCount();
     });
-
-    socket.on('disconnect',function(){toast('Mất kết nối...');});
-    socket.on('reconnect',function(){
-      toast('Đã kết nối lại');
-      socket.emit('join',{name:myName});
-    });
+    socket.on('disconnect',function(){showToast('Mất kết nối...');});
+    socket.on('reconnect',function(){showToast('Đã kết nối lại');socket.emit('join',{name:myName});});
   });
 }
 </script>
