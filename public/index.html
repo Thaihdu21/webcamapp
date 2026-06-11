@@ -6,828 +6,596 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>WebRTC Meet</title>
-
-<!-- Font Awesome 5 (iOS 12 compatible) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-
-<!-- Socket.io -->
-<script src="/socket.io/socket.io.js"></script>
-
+<!-- Socket.io loaded after DOM -->
 <style>
-  /* ===== RESET & BASE ===== */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#202124;--surface:#3c4043;--surface2:#2d2e31;
+  --bar:#1e1f22;--accent:#8ab4f8;--danger:#f28b82;
+  --text:#e8eaed;--dim:#9aa0a6;--bar-h:72px;--gap:4px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Roboto,Arial,sans-serif;
+  overflow:hidden;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;}
 
-  :root {
-    --bg: #202124;
-    --surface: #3c4043;
-    --surface2: #2d2e31;
-    --bar-bg: #1e1f22;
-    --accent: #8ab4f8;
-    --danger: #f28b82;
-    --green: #81c995;
-    --text: #e8eaed;
-    --text-dim: #9aa0a6;
-    --bar-h: 72px;
-    --radius: 12px;
-  }
+/* ── LOBBY ── */
+#lobby{display:flex;flex-direction:column;align-items:center;
+  justify-content:center;height:100%;gap:18px;padding:28px;}
+#lobby h1{font-size:1.5rem;font-weight:700;}
+#lobby p{color:var(--dim);font-size:.88rem;text-align:center;}
+#name-input{width:100%;max-width:300px;padding:13px 16px;
+  border-radius:8px;border:2px solid var(--surface);
+  background:var(--surface2);color:var(--text);font-size:1rem;
+  outline:none;-webkit-appearance:none;}
+#name-input:focus{border-color:var(--accent);}
+#join-btn{width:100%;max-width:300px;padding:13px;
+  background:var(--accent);color:#202124;font-size:1rem;
+  font-weight:700;border:none;border-radius:8px;cursor:pointer;}
 
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-    overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-  }
+/* ── ROOM ── */
+#room{display:none;flex-direction:column;height:100%;}
 
-  /* ===== LOBBY ===== */
-  #lobby {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 20px;
-    padding: 24px;
-  }
-  #lobby h1 {
-    font-size: 1.6rem;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: -0.5px;
-  }
-  #lobby p { color: var(--text-dim); font-size: 0.9rem; text-align: center; }
-  #name-input {
-    width: 100%;
-    max-width: 320px;
-    padding: 14px 18px;
-    border-radius: 8px;
-    border: 2px solid var(--surface);
-    background: var(--surface2);
-    color: var(--text);
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  #name-input:focus { border-color: var(--accent); }
-  #join-btn {
-    width: 100%;
-    max-width: 320px;
-    padding: 14px;
-    background: var(--accent);
-    color: #202124;
-    font-size: 1rem;
-    font-weight: 700;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-  }
-  #join-btn:active { opacity: 0.8; }
+/* ── VIDEO GRID ── */
+#video-grid{
+  flex:1;display:grid;gap:var(--gap);padding:var(--gap);
+  background:var(--bg);overflow:hidden;align-content:center;
+}
 
-  /* ===== ROOM ===== */
-  #room { display: none; flex-direction: column; height: 100%; }
+/* Grid layouts – Google Meet style */
+/* 1 người: 1 ô to giữa */
+.g1{grid-template-columns:1fr;grid-template-rows:1fr;}
+/* 2 người: 2 cột bằng nhau */
+.g2{grid-template-columns:1fr 1fr;}
+/* 3 người: hàng trên 2 ô, hàng dưới 1 ô giữa */
+.g3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+.g3 .tile:nth-child(3){
+  grid-column:1/3;
+  max-width:50%;justify-self:center;width:100%;
+}
+/* 4 người: 2x2 */
+.g4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+/* 5-6 người: 3 cột */
+.g5,.g6{grid-template-columns:1fr 1fr 1fr;}
+/* 7+: 3 cột */
+.gmany{grid-template-columns:1fr 1fr 1fr;}
 
-  /* ===== VIDEO GRID — Google Meet style ===== */
-  #video-grid {
-    flex: 1;
-    display: grid;
-    gap: 4px;
-    padding: 4px;
-    background: var(--bg);
-    overflow: hidden;
-    /* dynamic grid columns set by JS */
-  }
+/* ── TILE ── */
+.tile{
+  position:relative;background:#1a1b1e;border-radius:10px;
+  overflow:hidden;aspect-ratio:16/9;
+  display:flex;align-items:center;justify-content:center;
+}
+.tile video{
+  width:100%;height:100%;object-fit:cover;
+  display:block;background:#000;border-radius:10px;
+  /* iOS critical */
+  -webkit-playsinline:true;
+}
+/* tên + mic status */
+.tile-bar{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:20px 8px 6px;
+  background:linear-gradient(transparent,rgba(0,0,0,.55));
+  display:flex;align-items:center;justify-content:space-between;
+  pointer-events:none;
+}
+.tile-name{
+  color:#fff;font-size:.75rem;font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;align-items:center;gap:5px;max-width:80%;
+}
+.tile-mic-icon{
+  width:24px;height:24px;border-radius:50%;
+  background:rgba(242,139,130,.9);color:#fff;
+  display:none;align-items:center;justify-content:center;
+  font-size:.6rem;flex-shrink:0;
+}
+.tile-mic-icon.show{display:flex;}
 
-  /* Each tile */
-  .video-tile {
-    position: relative;
-    background: var(--surface2);
-    border-radius: var(--radius);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    aspect-ratio: 16/9;
-  }
+/* cam-off avatar */
+.tile-avatar{
+  position:absolute;inset:0;display:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  background:#1a1b1e;gap:8px;pointer-events:none;
+}
+.tile-avatar.show{display:flex;}
+.av-circle{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--surface);display:flex;align-items:center;
+  justify-content:center;font-size:1.4rem;color:var(--dim);
+}
+.av-name{color:var(--dim);font-size:.8rem;}
 
-  .video-tile video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    border-radius: var(--radius);
-    background: #000;
-    /* Critical for iOS */
-    -webkit-playsinline: true;
-    playsinline: true;
-  }
+/* ── BAR ── */
+#bar{
+  height:var(--bar-h);background:var(--bar);
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;padding:0 12px;flex-shrink:0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+.btn{
+  width:50px;height:50px;border-radius:50%;border:none;
+  background:var(--surface);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;transition:background .15s,transform .1s;
+  -webkit-tap-highlight-color:transparent;flex-shrink:0;
+}
+.btn:active{transform:scale(.9);}
+.btn.off{background:var(--danger);}
+.btn.end{background:#d93025;width:58px;}
+#badge{
+  background:var(--surface);color:var(--dim);
+  padding:5px 12px;border-radius:20px;font-size:.78rem;
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
 
-  /* Name label */
-  .tile-label {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    background: rgba(0,0,0,0.55);
-    color: #fff;
-    font-size: 0.78rem;
-    padding: 3px 8px;
-    border-radius: 6px;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    max-width: calc(100% - 16px);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+/* ── TOAST ── */
+#toast{
+  position:fixed;bottom:calc(var(--bar-h) + 10px);left:50%;
+  transform:translateX(-50%);
+  background:rgba(60,64,67,.95);color:var(--text);
+  padding:8px 16px;border-radius:8px;font-size:.82rem;
+  pointer-events:none;opacity:0;transition:opacity .3s;
+  white-space:nowrap;z-index:999;
+}
+#toast.show{opacity:1;}
 
-  /* Mic muted icon on tile */
-  .tile-mic-off {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(242,139,130,0.85);
-    color: #fff;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-  }
-  .tile-mic-off.show { display: flex; }
+/* ── MOBILE ── */
+@media(max-width:600px) and (orientation:portrait){
+  .g5,.g6,.gmany{grid-template-columns:1fr 1fr;}
+  .g3 .tile:nth-child(3){max-width:100%;}
+  .btn{width:44px;height:44px;font-size:.95rem;}
+  .btn.end{width:50px;}
+  #bar{gap:8px;}
+}
+@media(max-width:380px){
+  #bar{gap:6px;padding:0 6px;}
+  .btn{width:40px;height:40px;font-size:.88rem;}
+}
 
-  /* Cam-off avatar */
-  .tile-avatar {
-    position: absolute;
-    inset: 0;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface2);
-    gap: 10px;
-    pointer-events: none;
-  }
-  .tile-avatar.show { display: flex; }
-  .tile-avatar .avatar-circle {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.6rem;
-    color: var(--text-dim);
-  }
-  .tile-avatar .avatar-name {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-  }
-
-  /* ===== BOTTOM BAR ===== */
-  #bar {
-    height: var(--bar-h);
-    background: var(--bar-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 0 16px;
-    flex-shrink: 0;
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-
-  .ctrl-btn {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    transition: background 0.15s, transform 0.1s;
-    color: #fff;
-    background: var(--surface);
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
-  .ctrl-btn:active { transform: scale(0.92); }
-
-  .ctrl-btn.off { background: var(--danger); color: #fff; }
-  .ctrl-btn.end { background: #f44336; width: 60px; }
-
-  /* Participant count badge */
-  #peer-count {
-    background: var(--surface);
-    color: var(--text-dim);
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: 4px;
-  }
-
-  /* ===== TOAST ===== */
-  #toast {
-    position: fixed;
-    bottom: calc(var(--bar-h) + 12px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(60,64,67,0.95);
-    color: var(--text);
-    padding: 9px 18px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s;
-    white-space: nowrap;
-    z-index: 999;
-  }
-  #toast.show { opacity: 1; }
-
-  /* ===== RESPONSIVE GRID ===== */
-  /* 1 person */
-  .grid-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-  /* 2 */
-  .grid-2 { grid-template-columns: 1fr 1fr; }
-  /* 3 */
-  .grid-3 { grid-template-columns: 1fr 1fr; }
-  .grid-3 .video-tile:last-child { grid-column: 1 / -1; max-width: 50%; margin: 0 auto; width: 100%; }
-  /* 4 */
-  .grid-4 { grid-template-columns: 1fr 1fr; }
-  /* 5-6 */
-  .grid-5, .grid-6 { grid-template-columns: 1fr 1fr 1fr; }
-  /* 7+ */
-  .grid-many { grid-template-columns: repeat(3, 1fr); }
-
-  /* Mobile portrait: max 2 columns */
-  @media (max-width: 600px) and (orientation: portrait) {
-    .grid-3, .grid-5, .grid-6, .grid-many {
-      grid-template-columns: 1fr 1fr;
-    }
-    .grid-3 .video-tile:last-child { max-width: 100%; }
-    .ctrl-btn { width: 46px; height: 46px; font-size: 1rem; }
-    .ctrl-btn.end { width: 52px; }
-    #bar { gap: 10px; }
-  }
-
-  @media (max-width: 380px) {
-    #bar { gap: 7px; padding: 0 8px; }
-    .ctrl-btn { width: 42px; height: 42px; font-size: 0.9rem; }
-  }
+/* 1 tile: giới hạn chiều cao để không to quá */
+.g1 .tile{
+  max-width:min(100%, calc((100vh - var(--bar-h) - 60px) * 16/9));
+  max-height:calc(100vh - var(--bar-h) - 60px);
+  justify-self:center;align-self:center;
+  width:100%;
+}
 </style>
 </head>
 <body>
 
-<!-- ===== LOBBY ===== -->
+<!-- LOBBY -->
 <div id="lobby">
   <h1>🎥 WebRTC Meet</h1>
-  <p>Nhập tên và tham gia phòng — không cần mã phòng</p>
-  <input id="name-input" type="text" placeholder="Tên của bạn..." maxlength="30" autocomplete="off" />
-  <button id="join-btn"><i class="fas fa-video"></i> &nbsp;Tham gia ngay</button>
+  <p>Nhập tên rồi vào — không cần mã phòng</p>
+  <input id="name-input" type="text" placeholder="Tên của bạn..." maxlength="24" autocomplete="off" />
+  <button id="join-btn"><i class="fas fa-video"></i>&nbsp; Tham gia</button>
 </div>
 
-<!-- ===== ROOM ===== -->
+<!-- ROOM -->
 <div id="room">
-  <div id="video-grid" class="grid-1"></div>
-
+  <div id="video-grid" class="g1"></div>
   <div id="bar">
-    <button class="ctrl-btn" id="btn-mic" title="Tắt/Bật mic">
-      <i class="fas fa-microphone"></i>
-    </button>
-    <button class="ctrl-btn" id="btn-cam" title="Tắt/Bật camera">
-      <i class="fas fa-video"></i>
-    </button>
-    <button class="ctrl-btn" id="btn-swap" title="Đổi camera">
-      <i class="fas fa-sync-alt"></i>
-    </button>
-    <button class="ctrl-btn end" id="btn-end" title="Rời phòng">
-      <i class="fas fa-phone-slash"></i>
-    </button>
-    <div id="peer-count"><i class="fas fa-users"></i> <span id="count-num">1</span></div>
+    <button class="btn" id="btn-mic"><i class="fas fa-microphone"></i></button>
+    <button class="btn" id="btn-cam"><i class="fas fa-video"></i></button>
+    <button class="btn" id="btn-swap"><i class="fas fa-sync-alt"></i></button>
+    <button class="btn end" id="btn-end"><i class="fas fa-phone-slash"></i></button>
+    <div id="badge"><i class="fas fa-users"></i><span id="cnt">1</span></div>
   </div>
 </div>
 
 <div id="toast"></div>
 
 <script>
-// ============================================================
-//  CONFIG
-// ============================================================
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    // Public TURN fallback (replace with your own for production)
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    }
+// ─── Socket.io: load runtime từ server để tương thích mọi version ───
+(function loadSocketIO(){
+  var s=document.createElement('script');
+  s.src='/socket.io/socket.io.js';
+  s.onload=init;
+  s.onerror=function(){toast('Không tải được socket.io');};
+  document.head.appendChild(s);
+})();
+
+// ─── GLOBALS ───
+var socket,myId,myName='Guest';
+var localStream=null;
+var micOn=true,camOn=true;
+var facing='user'; // 'user' | 'environment'
+var swapping=false;
+var peers={}; // id -> {pc,name,audioOn,videoOn}
+
+var ICE={
+  iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'turn:openrelay.metered.ca:80',
+     username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443',
+     username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp',
+     username:'openrelayproject',credential:'openrelayproject'}
   ],
-  iceCandidatePoolSize: 10
+  iceCandidatePoolSize:8
 };
 
-// ============================================================
-//  STATE
-// ============================================================
-let localStream = null;
-let myName = '';
-let socket = null;
-let myId = '';
-
-// peers[id] = { pc: RTCPeerConnection, name, videoEl, audioOn, videoOn }
-const peers = {};
-
-let micOn = true;
-let camOn = true;
-let currentFacing = 'user'; // 'user' | 'environment'
-let isSwapping = false;
-
-// ============================================================
-//  UTILS
-// ============================================================
-function showToast(msg, dur = 2500) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('show'), dur);
+// ─── TOAST ───
+var _toastTimer;
+function toast(msg,dur){
+  dur=dur||2500;
+  var el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(function(){el.classList.remove('show');},dur);
 }
 
-function updateCountBadge() {
-  const total = Object.keys(peers).length + 1;
-  document.getElementById('count-num').textContent = total;
+// ─── GRID ───
+function updateGrid(){
+  var g=document.getElementById('video-grid');
+  var n=g.children.length;
+  g.className=
+    n<=1?'g1':n===2?'g2':n===3?'g3':
+    n===4?'g4':n===5?'g5':n===6?'g6':'gmany';
 }
 
-// ============================================================
-//  GRID LAYOUT — Google Meet style
-// ============================================================
-function updateGrid() {
-  const grid = document.getElementById('video-grid');
-  const n = grid.children.length;
-  grid.className = '';
-  if      (n <= 1)  grid.classList.add('grid-1');
-  else if (n === 2) grid.classList.add('grid-2');
-  else if (n === 3) grid.classList.add('grid-3');
-  else if (n === 4) grid.classList.add('grid-4');
-  else if (n === 5) grid.classList.add('grid-5');
-  else if (n === 6) grid.classList.add('grid-6');
-  else              grid.classList.add('grid-many');
-}
+// ─── TILE ───
+function makeTile(id,name,stream,isLocal){
+  var tile=document.createElement('div');
+  tile.className='tile';tile.id='tile-'+id;
 
-// ============================================================
-//  TILE MANAGEMENT
-// ============================================================
-function createTile(id, name, stream, isLocal) {
-  const tile = document.createElement('div');
-  tile.className = 'video-tile';
-  tile.id = 'tile-' + id;
+  var video=document.createElement('video');
+  video.autoplay=true;
+  video.setAttribute('playsinline','');
+  video.setAttribute('webkit-playsinline','');
+  video.muted=isLocal;
+  if(stream){video.srcObject=stream;safePlay(video);}
 
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.playsInline = true;           // iOS requirement
-  video.setAttribute('playsinline', '');
-  video.setAttribute('webkit-playsinline', '');
-  video.muted = isLocal;              // Never echo local audio
-  if (stream) {
-    video.srcObject = stream;
-    video.play().catch(() => {});
-  }
+  var avatar=document.createElement('div');
+  avatar.className='tile-avatar';
+  avatar.innerHTML='<div class="av-circle"><i class="fas fa-user"></i></div>'
+    +'<div class="av-name">'+esc(name)+'</div>';
 
-  // Cam-off avatar
-  const avatar = document.createElement('div');
-  avatar.className = 'tile-avatar';
-  avatar.innerHTML = `
-    <div class="avatar-circle"><i class="fas fa-user"></i></div>
-    <span class="avatar-name">${name}</span>
-  `;
+  var bar=document.createElement('div');
+  bar.className='tile-bar';
 
-  // Mic-off badge
-  const micBadge = document.createElement('div');
-  micBadge.className = 'tile-mic-off';
-  micBadge.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+  var nameEl=document.createElement('div');
+  nameEl.className='tile-name';
+  nameEl.innerHTML='<i class="fas fa-user" style="font-size:.65rem"></i>'+esc(name)
+    +(isLocal?' <span style="color:var(--dim)">(Bạn)</span>':'');
 
-  // Name label
-  const label = document.createElement('div');
-  label.className = 'tile-label';
-  label.innerHTML = `<i class="fas fa-user"></i> ${name}${isLocal ? ' (Bạn)' : ''}`;
+  var micIcon=document.createElement('div');
+  micIcon.className='tile-mic-icon';
+  micIcon.innerHTML='<i class="fas fa-microphone-slash"></i>';
 
-  tile.append(video, avatar, micBadge, label);
-
+  bar.appendChild(nameEl);bar.appendChild(micIcon);
+  tile.append(video,avatar,bar);
   document.getElementById('video-grid').appendChild(tile);
   updateGrid();
   return tile;
 }
 
-function removeTile(id) {
-  const t = document.getElementById('tile-' + id);
-  if (t) t.remove();
-  updateGrid();
+function safePlay(video){
+  var p=video.play();
+  if(p&&p.catch)p.catch(function(){});
 }
 
-function setTileMic(id, on) {
-  const tile = document.getElementById('tile-' + id);
-  if (!tile) return;
-  const badge = tile.querySelector('.tile-mic-off');
-  if (badge) badge.classList.toggle('show', !on);
+function removeTile(id){
+  var t=document.getElementById('tile-'+id);
+  if(t)t.remove();updateGrid();
 }
 
-function setTileCam(id, on) {
-  const tile = document.getElementById('tile-' + id);
-  if (!tile) return;
-  const avatar = tile.querySelector('.tile-avatar');
-  const video  = tile.querySelector('video');
-  if (on) {
-    avatar.classList.remove('show');
-    video.style.visibility = 'visible';
-  } else {
-    avatar.classList.add('show');
-    video.style.visibility = 'hidden';
+function setTileMic(id,on){
+  var t=document.getElementById('tile-'+id);if(!t)return;
+  var ic=t.querySelector('.tile-mic-icon');
+  if(ic)ic.classList.toggle('show',!on);
+}
+
+function setTileCam(id,on){
+  var t=document.getElementById('tile-'+id);if(!t)return;
+  var av=t.querySelector('.tile-avatar');
+  var vid=t.querySelector('video');
+  if(on){av.classList.remove('show');vid.style.visibility='visible';}
+  else {av.classList.add('show');  vid.style.visibility='hidden';}
+}
+
+function updateCount(){
+  document.getElementById('cnt').textContent=Object.keys(peers).length+1;
+}
+
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── GET MEDIA ───
+// Android: phải stop stream cũ TRƯỚC khi mở stream mới cùng loại camera
+// iOS 12: không hỗ trợ facingMode exact → dùng ideal, fallback plain
+function getMedia(facingMode,cb){
+  var constraints={
+    audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
+    video:{
+      facingMode:{ideal:facingMode},
+      width:{ideal:640,max:1280},height:{ideal:480,max:720},
+      frameRate:{ideal:20,max:30}
+    }
+  };
+  navigator.mediaDevices.getUserMedia(constraints)
+  .then(function(s){cb(null,s);})
+  .catch(function(){
+    // fallback 1: bỏ facingMode constraint
+    navigator.mediaDevices.getUserMedia({audio:true,video:{width:{ideal:640},height:{ideal:480}}})
+    .then(function(s){cb(null,s);})
+    .catch(function(){
+      // fallback 2: chỉ audio
+      navigator.mediaDevices.getUserMedia({audio:true,video:false})
+      .then(function(s){cb(null,s);})
+      .catch(function(e){cb(e,null);});
+    });
+  });
+}
+
+// ─── PEER CONNECTION ───
+function createPC(remoteId,remoteName){
+  if(peers[remoteId])return peers[remoteId].pc;
+  var pc=new RTCPeerConnection(ICE);
+  peers[remoteId]={pc:pc,name:remoteName,audioOn:true,videoOn:true};
+
+  if(localStream){
+    localStream.getTracks().forEach(function(t){pc.addTrack(t,localStream);});
   }
-}
 
-// ============================================================
-//  GET LOCAL MEDIA (iOS/Android compat)
-// ============================================================
-async function getLocalStream(facingMode) {
-  const constraints = {
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
-    },
-    video: {
-      facingMode: facingMode,
-      width:  { ideal: 640, max: 1280 },
-      height: { ideal: 480, max: 720 },
-      frameRate: { ideal: 24, max: 30 }
+  pc.onicecandidate=function(e){
+    if(e.candidate)socket.emit('ice-candidate',{to:remoteId,candidate:e.candidate});
+  };
+
+  pc.ontrack=function(e){
+    var stream=e.streams&&e.streams[0];if(!stream)return;
+    var tile=document.getElementById('tile-'+remoteId);
+    if(!tile){
+      tile=makeTile(remoteId,remoteName,null,false);
+    }
+    var vid=tile.querySelector('video');
+    if(vid&&(!vid.srcObject||vid.srcObject.id!==stream.id)){
+      vid.srcObject=stream;safePlay(vid);
     }
   };
 
-  // iOS 12 fallback: try exact facingMode first, then drop
-  try {
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  } catch (e) {
-    console.warn('Exact facingMode failed, retrying without:', e);
-    try {
-      return await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    } catch (e2) {
-      console.warn('Video failed, audio only:', e2);
-      return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    }
-  }
-}
-
-// ============================================================
-//  WEBRTC — Create peer connection
-// ============================================================
-function createPeerConnection(remoteId, remoteName) {
-  const pc = new RTCPeerConnection(ICE_CONFIG);
-
-  // Add all local tracks
-  if (localStream) {
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  }
-
-  // ICE candidates
-  pc.onicecandidate = ({ candidate }) => {
-    if (candidate) {
-      socket.emit('ice-candidate', { to: remoteId, candidate });
-    }
+  pc.onconnectionstatechange=function(){
+    var st=pc.connectionState;
+    console.log('[PC '+remoteName+']',st);
+    if(st==='failed'&&pc.restartIce)setTimeout(function(){pc.restartIce();},1500);
   };
 
-  // Connection state logging
-  pc.onconnectionstatechange = () => {
-    console.log(`[${remoteName}] connection: ${pc.connectionState}`);
-    if (pc.connectionState === 'failed') {
-      // Try ICE restart
-      setTimeout(() => {
-        if (pc.connectionState === 'failed') {
-          pc.restartIce && pc.restartIce();
-        }
-      }, 2000);
-    }
-  };
-
-  pc.oniceconnectionstatechange = () => {
-    console.log(`[${remoteName}] ICE: ${pc.iceConnectionState}`);
-  };
-
-  // Remote stream
-  pc.ontrack = ({ streams }) => {
-    const stream = streams[0];
-    const tile = document.getElementById('tile-' + remoteId);
-    if (tile) {
-      const video = tile.querySelector('video');
-      if (video && (!video.srcObject || video.srcObject.id !== stream.id)) {
-        video.srcObject = stream;
-        video.play().catch(() => {});
-      }
-    } else {
-      // Tile may not exist yet — create it
-      createTile(remoteId, remoteName, stream, false);
-    }
-    if (peers[remoteId]) peers[remoteId].stream = stream;
-  };
-
-  peers[remoteId] = { pc, name: remoteName, audioOn: true, videoOn: true };
   return pc;
 }
 
-// ============================================================
-//  OFFER / ANSWER
-// ============================================================
-async function callPeer(remoteId, remoteName) {
-  // Avoid duplicate connections
-  if (peers[remoteId]) return;
-
-  const pc = createPeerConnection(remoteId, remoteName);
-  createTile(remoteId, remoteName, null, false);
-
-  try {
-    const offer = await pc.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
+async function callPeer(remoteId,remoteName){
+  if(peers[remoteId])return;
+  var pc=createPC(remoteId,remoteName);
+  if(!document.getElementById('tile-'+remoteId))makeTile(remoteId,remoteName,null,false);
+  try{
+    var offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
     await pc.setLocalDescription(offer);
-    socket.emit('offer', { to: remoteId, offer });
-  } catch (e) {
-    console.error('createOffer error:', e);
-  }
+    socket.emit('offer',{to:remoteId,offer:offer});
+  }catch(e){console.error('callPeer',e);}
 }
 
-async function handleOffer(fromId, fromName, offer) {
-  if (peers[fromId]) {
-    // Glare: both sides offered simultaneously → lower id becomes answerer
-    if (myId > fromId) {
-      // rollback & re-answer
-      try { await peers[fromId].pc.setLocalDescription({ type: 'rollback' }); } catch(e) {}
-    } else {
-      return; // We keep our offer
-    }
+async function handleOffer(fromId,fromName,offer){
+  // Glare resolution: higher socket id becomes answerer
+  if(peers[fromId]){
+    if(myId>fromId){
+      try{await peers[fromId].pc.setLocalDescription({type:'rollback'});}catch(e){}
+    } else return;
   }
-
-  const pc = createPeerConnection(fromId, fromName);
-  if (!document.getElementById('tile-' + fromId)) {
-    createTile(fromId, fromName, null, false);
-  }
-
-  try {
+  var pc=createPC(fromId,fromName);
+  if(!document.getElementById('tile-'+fromId))makeTile(fromId,fromName,null,false);
+  try{
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
+    var answer=await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    socket.emit('answer', { to: fromId, answer });
-  } catch (e) {
-    console.error('handleOffer error:', e);
-  }
+    socket.emit('answer',{to:fromId,answer:answer});
+  }catch(e){console.error('handleOffer',e);}
 }
 
-async function handleAnswer(fromId, answer) {
-  const peer = peers[fromId];
-  if (!peer) return;
-  try {
-    if (peer.pc.signalingState === 'have-local-offer') {
-      await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+async function handleAnswer(fromId,answer){
+  var p=peers[fromId];if(!p)return;
+  try{
+    if(p.pc.signalingState==='have-local-offer')
+      await p.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }catch(e){console.error('handleAnswer',e);}
+}
+
+async function handleICE(fromId,candidate){
+  var p=peers[fromId];if(!p)return;
+  try{await p.pc.addIceCandidate(new RTCIceCandidate(candidate));}
+  catch(e){if(e.message&&e.message.indexOf('end-of-candidates')<0)console.warn('ICE',e.message);}
+}
+
+// ─── SWAP CAM (Android fix) ───
+// Bước quan trọng: stop TOÀN BỘ video tracks của localStream TRƯỚC khi getUserMedia
+function swapCam(){
+  if(swapping)return;
+  swapping=true;
+  var icon=document.querySelector('#btn-swap i');
+  icon.classList.add('fa-spin');
+
+  var newFacing=facing==='user'?'environment':'user';
+
+  // STOP old video tracks first — Android requirement
+  if(localStream){
+    localStream.getVideoTracks().forEach(function(t){t.stop();});
+  }
+
+  getMedia(newFacing,async function(err,newStream){
+    icon.classList.remove('fa-spin');
+    swapping=false;
+    if(err||!newStream){
+      toast('Không đổi được camera');
+      console.error('swapCam',err);
+      // try restore old camera
+      getMedia(facing,function(e2,s2){
+        if(s2)applyNewStream(s2,facing);
+      });
+      return;
     }
-  } catch (e) {
-    console.error('handleAnswer error:', e);
-  }
+    await applyNewStream(newStream,newFacing);
+    toast(newFacing==='user'?'📷 Camera trước':'📷 Camera sau');
+  });
 }
 
-async function handleIceCandidate(fromId, candidate) {
-  const peer = peers[fromId];
-  if (!peer) return;
-  try {
-    await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
-  } catch (e) {
-    // Ignore benign ICE errors (end-of-candidates etc.)
-    if (!e.message.includes('end-of-candidates')) {
-      console.warn('ICE error:', e.message);
-    }
-  }
-}
+async function applyNewStream(newStream,newFacing){
+  var newVid=newStream.getVideoTracks()[0];
 
-// ============================================================
-//  SWAP CAMERA (Android & iOS optimized)
-// ============================================================
-async function swapCamera() {
-  if (isSwapping) return;
-  isSwapping = true;
-  document.getElementById('btn-swap').querySelector('i').classList.add('fa-spin');
-
-  const newFacing = currentFacing === 'user' ? 'environment' : 'user';
-
-  try {
-    const newStream = await getLocalStream(newFacing);
-    const newVideoTrack = newStream.getVideoTracks()[0];
-
-    // Replace track in all peer connections
-    for (const id in peers) {
-      const pc = peers[id].pc;
-      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-      if (sender) {
-        try { await sender.replaceTrack(newVideoTrack); } catch(e) { console.warn(e); }
+  // replaceTrack in all PCs
+  var ids=Object.keys(peers);
+  for(var i=0;i<ids.length;i++){
+    var pc=peers[ids[i]].pc;
+    var senders=pc.getSenders();
+    for(var j=0;j<senders.length;j++){
+      if(senders[j].track&&senders[j].track.kind==='video'){
+        try{await senders[j].replaceTrack(newVid||null);}catch(e){console.warn('replaceTrack',e);}
+        break;
       }
     }
-
-    // Update local stream
-    const oldVideoTrack = localStream.getVideoTracks()[0];
-    if (oldVideoTrack) {
-      oldVideoTrack.stop();
-      localStream.removeTrack(oldVideoTrack);
-    }
-    localStream.addTrack(newVideoTrack);
-
-    // Update local tile video
-    const localTile = document.getElementById('tile-local');
-    if (localTile) {
-      const video = localTile.querySelector('video');
-      if (video) {
-        video.srcObject = localStream;
-        video.play().catch(() => {});
-      }
-    }
-
-    // Stop extra audio tracks from new stream
-    newStream.getAudioTracks().forEach(t => t.stop());
-
-    currentFacing = newFacing;
-    showToast(newFacing === 'user' ? '📷 Camera trước' : '📷 Camera sau');
-  } catch (e) {
-    console.error('swapCamera error:', e);
-    showToast('Không thể đổi camera');
-  } finally {
-    isSwapping = false;
-    document.getElementById('btn-swap').querySelector('i').classList.remove('fa-spin');
-  }
-}
-
-// ============================================================
-//  CONTROLS
-// ============================================================
-function toggleMic() {
-  micOn = !micOn;
-  localStream.getAudioTracks().forEach(t => { t.enabled = micOn; });
-  const btn = document.getElementById('btn-mic');
-  btn.classList.toggle('off', !micOn);
-  btn.innerHTML = micOn
-    ? '<i class="fas fa-microphone"></i>'
-    : '<i class="fas fa-microphone-slash"></i>';
-  setTileMic('local', micOn);
-  socket.emit('media-state', { video: camOn, audio: micOn });
-  showToast(micOn ? 'Microphone bật' : 'Microphone tắt');
-}
-
-function toggleCam() {
-  camOn = !camOn;
-  localStream.getVideoTracks().forEach(t => { t.enabled = camOn; });
-  const btn = document.getElementById('btn-cam');
-  btn.classList.toggle('off', !camOn);
-  btn.innerHTML = camOn
-    ? '<i class="fas fa-video"></i>'
-    : '<i class="fas fa-video-slash"></i>';
-  setTileCam('local', camOn);
-  socket.emit('media-state', { video: camOn, audio: micOn });
-  showToast(camOn ? 'Camera bật' : 'Camera tắt');
-}
-
-function leaveRoom() {
-  for (const id in peers) {
-    peers[id].pc.close();
-    delete peers[id];
-  }
-  if (localStream) {
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = null;
-  }
-  if (socket) socket.disconnect();
-
-  document.getElementById('video-grid').innerHTML = '';
-  document.getElementById('room').style.display = 'none';
-  document.getElementById('lobby').style.display = 'flex';
-  updateGrid();
-}
-
-// ============================================================
-//  JOIN ROOM
-// ============================================================
-async function joinRoom() {
-  myName = document.getElementById('name-input').value.trim() || 'Guest';
-  document.getElementById('lobby').style.display = 'none';
-  document.getElementById('room').style.display = 'flex';
-
-  // 1. Get local media
-  try {
-    localStream = await getLocalStream(currentFacing);
-  } catch (e) {
-    showToast('Không thể truy cập camera/mic');
-    console.error(e);
   }
 
-  // 2. Create local tile
-  createTile('local', myName, localStream, true);
-
-  // 3. Connect socket
-  socket = io({ transports: ['websocket', 'polling'] });
-
-  socket.on('connect', () => {
-    myId = socket.id;
-    socket.emit('join', { name: myName });
+  // Update localStream reference
+  // Remove old video tracks from localStream
+  localStream.getVideoTracks().forEach(function(t){
+    try{localStream.removeTrack(t);}catch(e){}
   });
+  if(newVid)localStream.addTrack(newVid);
 
-  // Existing peers when joining
-  socket.on('existing-users', async (users) => {
-    for (const user of users) {
-      await callPeer(user.id, user.name);
-    }
-    updateCountBadge();
-  });
+  // Stop extra audio from newStream (we keep existing audio track)
+  newStream.getAudioTracks().forEach(function(t){t.stop();});
 
-  // New user joins after us
-  socket.on('user-joined', ({ id, name }) => {
-    showToast(`${name} đã tham gia`);
-    updateCountBadge();
-    // The new user will call us — we don't initiate here to avoid glare
-  });
+  // Update local tile
+  var localTile=document.getElementById('tile-local');
+  if(localTile){
+    var vid=localTile.querySelector('video');
+    if(vid){vid.srcObject=localStream;safePlay(vid);}
+  }
 
-  socket.on('offer', async ({ from, offer }) => {
-    // Find name from peers or fallback
-    const name = peers[from]?.name || 'Guest';
-    await handleOffer(from, name, offer);
-    updateCountBadge();
-  });
+  facing=newFacing;
 
-  socket.on('answer', async ({ from, answer }) => {
-    await handleAnswer(from, answer);
-  });
-
-  socket.on('ice-candidate', async ({ from, candidate }) => {
-    await handleIceCandidate(from, candidate);
-  });
-
-  socket.on('peer-media-state', ({ id, video, audio }) => {
-    if (peers[id]) {
-      peers[id].audioOn = audio;
-      peers[id].videoOn = video;
-    }
-    setTileMic(id, audio);
-    setTileCam(id, video);
-  });
-
-  socket.on('user-left', ({ id }) => {
-    const name = peers[id]?.name || 'Người dùng';
-    showToast(`${name} đã rời phòng`);
-    if (peers[id]) {
-      peers[id].pc.close();
-      delete peers[id];
-    }
-    removeTile(id);
-    updateCountBadge();
-  });
-
-  socket.on('disconnect', () => {
-    showToast('Mất kết nối server...');
-  });
-
-  socket.on('reconnect', () => {
-    showToast('Đã kết nối lại');
-    socket.emit('join', { name: myName });
-  });
-
-  updateCountBadge();
+  // Re-apply cam mute state
+  localStream.getVideoTracks().forEach(function(t){t.enabled=camOn;});
 }
 
-// ============================================================
-//  EVENT LISTENERS
-// ============================================================
-document.getElementById('join-btn').addEventListener('click', joinRoom);
-document.getElementById('name-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinRoom();
-});
-document.getElementById('btn-mic').addEventListener('click', toggleMic);
-document.getElementById('btn-cam').addEventListener('click', toggleCam);
-document.getElementById('btn-swap').addEventListener('click', swapCamera);
-document.getElementById('btn-end').addEventListener('click', leaveRoom);
+// ─── CONTROLS ───
+function toggleMic(){
+  micOn=!micOn;
+  if(localStream)localStream.getAudioTracks().forEach(function(t){t.enabled=micOn;});
+  var btn=document.getElementById('btn-mic');
+  btn.classList.toggle('off',!micOn);
+  btn.innerHTML=micOn?'<i class="fas fa-microphone"></i>':'<i class="fas fa-microphone-slash"></i>';
+  setTileMic('local',micOn);
+  if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
+  toast(micOn?'Mic bật':'Mic tắt');
+}
 
-// Prevent zoom on double-tap (mobile)
-document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+function toggleCam(){
+  camOn=!camOn;
+  if(localStream)localStream.getVideoTracks().forEach(function(t){t.enabled=camOn;});
+  var btn=document.getElementById('btn-cam');
+  btn.classList.toggle('off',!camOn);
+  btn.innerHTML=camOn?'<i class="fas fa-video"></i>':'<i class="fas fa-video-slash"></i>';
+  setTileCam('local',camOn);
+  if(socket)socket.emit('media-state',{video:camOn,audio:micOn});
+  toast(camOn?'Camera bật':'Camera tắt');
+}
+
+function leaveRoom(){
+  Object.keys(peers).forEach(function(id){
+    peers[id].pc.close();delete peers[id];
+  });
+  if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
+  if(socket){socket.disconnect();socket=null;}
+  document.getElementById('video-grid').innerHTML='';
+  document.getElementById('room').style.display='none';
+  document.getElementById('lobby').style.display='flex';
+  micOn=true;camOn=true;facing='user';
+}
+
+// ─── JOIN ───
+function init(){
+  document.getElementById('join-btn').onclick=joinRoom;
+  document.getElementById('name-input').onkeydown=function(e){if(e.key==='Enter')joinRoom();};
+  document.getElementById('btn-mic').onclick=toggleMic;
+  document.getElementById('btn-cam').onclick=toggleCam;
+  document.getElementById('btn-swap').onclick=swapCam;
+  document.getElementById('btn-end').onclick=leaveRoom;
+  document.addEventListener('dblclick',function(e){e.preventDefault();},{passive:false});
+}
+
+function joinRoom(){
+  myName=document.getElementById('name-input').value.trim()||'Guest';
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('room').style.display='flex';
+
+  getMedia(facing,function(err,stream){
+    if(err){toast('Không truy cập được camera/mic');console.error(err);}
+    else{localStream=stream;}
+
+    makeTile('local',myName,localStream,true);
+
+    // iOS 12 CRITICAL: chỉ dùng polling trước, upgrade sau
+    // Tránh lỗi WebSocket handshake trên iOS 12 Safari
+    socket=io({
+      transports:['polling','websocket'],
+      upgrade:true,
+      rememberUpgrade:false,
+      timeout:10000,
+      reconnection:true,
+      reconnectionAttempts:5,
+      reconnectionDelay:1000
+    });
+
+    socket.on('connect',function(){
+      myId=socket.id;
+      socket.emit('join',{name:myName});
+      updateCount();
+    });
+
+    socket.on('existing-users',function(users){
+      users.forEach(function(u){callPeer(u.id,u.name);});
+      updateCount();
+    });
+
+    socket.on('user-joined',function(u){
+      toast(u.name+' đã tham gia');
+      updateCount();
+    });
+
+    socket.on('offer',function(d){
+      var name=peers[d.from]?peers[d.from].name:'Guest';
+      handleOffer(d.from,name,d.offer);
+      updateCount();
+    });
+
+    socket.on('answer',function(d){handleAnswer(d.from,d.answer);});
+    socket.on('ice-candidate',function(d){handleICE(d.from,d.candidate);});
+
+    socket.on('peer-media-state',function(d){
+      if(peers[d.id]){peers[d.id].audioOn=d.audio;peers[d.id].videoOn=d.video;}
+      setTileMic(d.id,d.audio);
+      setTileCam(d.id,d.video);
+    });
+
+    socket.on('user-left',function(d){
+      var name=peers[d.id]?peers[d.id].name:'Người dùng';
+      toast(name+' đã rời phòng');
+      if(peers[d.id]){peers[d.id].pc.close();delete peers[d.id];}
+      removeTile(d.id);updateCount();
+    });
+
+    socket.on('disconnect',function(){toast('Mất kết nối...');});
+    socket.on('reconnect',function(){
+      toast('Đã kết nối lại');
+      socket.emit('join',{name:myName});
+    });
+  });
+}
 </script>
 </body>
 </html>
