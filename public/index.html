@@ -22,7 +22,7 @@
   --bar-h:    76px;
   --gap:      6px;
   --radius:   14px;
-  --pip-w:    200px;
+  --pip-w:    240px;
   --tile-shadow: 0 2px 16px rgba(0,0,0,.55);
 }
 
@@ -103,7 +103,11 @@ html, body {
 .g0 { display: none; }
 
 /* Grid layouts — chỉ tính peer tiles */
-.g1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.g1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  padding-left: calc(var(--pip-w) + 18px);
+}
 .g2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
 .g3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .g3 .tile:last-child { grid-column: 1 / 3; justify-self: center; width: 50%; }
@@ -265,6 +269,7 @@ html, body {
 /* MOBILE */
 @media (max-width: 600px) {
   :root { --gap: 4px; --radius: 10px; --bar-h: 68px; --pip-w: 160px; }
+  .g1 { padding-left: var(--gap); } /* mobile: bỏ padding, pip nằm đè lên góc */
   .g3 .tile:last-child { width: 65%; }
   .g5, .g6, .gmany { grid-template-columns: 1fr 1fr; }
   .btn { width: 46px; height: 46px; font-size: .95rem; }
